@@ -114,3 +114,7 @@ Facts and inferences are distinct.
 Every inference is explainable.
 Representations are projections.
 User corrections become evidence.
+
+Twin — the canonical semantic model.
+Mirror — the interface through which the user observes and interacts.
+Reflection — the current visible state of the Twin.
