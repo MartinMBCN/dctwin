@@ -52,6 +52,18 @@ Role & Evidence Extractor
 
         ↓
 
+Candidate Matching
+──────────────────
+"I think these objects may refer to the same thing."
+
+        ↓
+
+Merge Decision
+──────────────────
+"Should they actually become one object?"
+
+        ↓
+        
 Twin Mapper
 ───────────
 "I know how to represent evidence using the DCT schema."
