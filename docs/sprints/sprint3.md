@@ -47,6 +47,22 @@ duplicate
 
 possible_duplicate
 
+Reconciliation outcomes:
+NEW
+Add new evidence item.
+
+DUPLICATE
+Attach source reference to existing evidence.
+
+REFINEMENT
+Update canonical wording and retain both source references.
+
+CONFLICT
+Do not auto-merge; flag for user review.
+
+LOW_CONFIDENCE_MATCH
+Suggest possible merge; require confirmation.
+
 Sprint 3 performance requirement
 
 CV ingestion should produce a rendered Career Mirror in under 10 seconds for a normal two-page text-based CV, excluding first-time cold starts. If local execution exceeds this threshold, the system must expose step-level timing so we can distinguish local environment issues from structural bottlenecks.
