@@ -44,7 +44,21 @@ new
 duplicate
 possible_duplicate
 
-Technical debt remediation: Identify the reason(s) why the process takes so long, and whether they are unique to the local environment or need to be addressed as structural/architectural improvements.
+Sprint 3 performance requirement
+
+CV ingestion should produce a rendered Career Mirror in under 10 seconds for a normal two-page text-based CV, excluding first-time cold starts. If local execution exceeds this threshold, the system must expose step-level timing so we can distinguish local environment issues from structural bottlenecks.
+
+Add instrumentation before optimization:
+
+upload_received
+text_extraction_started
+text_extraction_completed
+model_call_started
+model_call_completed
+json_validation_completed
+mirror_rendered
+
+Log elapsed time for each step. You need to know whether the minute is coming from PDF extraction, Azure round-trip/model latency, JSON validation, rendering, or local app overhead.
 
 Sprint 3 acceptance criteria:
 
@@ -55,3 +69,7 @@ Duplicate evidence gains additional source provenance rather than becoming a new
 New evidence is added to the correct role.
 User can manually add free-form evidence to a selected role.
 Manually added evidence is treated like any other evidence source: classified, tagged, and available for inference.
+✓ Each ingestion step logs duration.
+✓ Total ingestion duration is visible in dev mode.
+✓ Text-based two-page CV completes under 10 seconds in deployed Azure environment, or bottleneck is identified.
+✓ Duplicate-detection/reconciliation does not add more than 3 seconds for a second CV of similar size.
