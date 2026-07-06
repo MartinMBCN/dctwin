@@ -1,9 +1,8 @@
 Sprint Goal
 
-The system can ingest additional user-provided evidence, whether from a second CV or free-form entry, and update the existing Twin without duplicating evidence already represented.
+The system can ingest additional user-provided evidence, whether from a second CV or free-form entry, and update the existing Twin without duplicating evidence already represented. This will verify whether the Twin is genuinely persistent rather than a one-shot CV transform.
 
-Verify whether the Twin is genuinely persistent rather than a one-shot CV transform.
-
+Details
 There are two workstreams.
 
 First, multi-source reconciliation:
@@ -63,8 +62,17 @@ Do not auto-merge; flag for user review.
 LOW_CONFIDENCE_MATCH
 Suggest possible merge; require confirmation.
 
-Sprint 3 performance requirement
+Additional CV requirement
+Manual source ingestion: pasted CV / career text
+As a user, I can paste CV-style text into the system so that it is treated as an evidence source and reconciled against my existing Twin.
 
+Therefore, Source can be any of the following, for the first or subsequent CV:
+├── PDF
+├── DOCX
+├── Pasted Text
+└── (Future) LinkedIn
+
+Sprint 3 performance requirements
 CV ingestion should produce a rendered Career Mirror in under 10 seconds for a normal two-page text-based CV, excluding first-time cold starts. If local execution exceeds this threshold, the system must expose step-level timing so we can distinguish local environment issues from structural bottlenecks.
 
 Add instrumentation before optimization:
