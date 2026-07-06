@@ -55,10 +55,13 @@ These modify the Twin rather than the displayed text directly.
 Design Philosophy
 
 The Mirror should feel like an ongoing conversation with the user's Digital Career Twin.
-The Twin is the model. The Mirror is the conversation with the model.
 
 It is not a report.
 
 It is not a dashboard.
 
 It is a living reflection of the current evidence.
+
+The Twin is the canonical model.
+
+The Mirror is the interface.
