@@ -1,1 +1,62 @@
+{
+  "person": {
+    "name": "",
+    "location": "",
+    "work_authorization": []
+  },
 
+  "roles": [
+    {
+      "id": "",
+      "title": "",
+      "organization": "",
+      "start_date": "",
+      "end_date": "",
+      "summary": "",
+      "evidence_ids": []
+    }
+  ],
+
+  "evidence_items": [
+    {
+      "id": "",
+      "type": "",
+      "text": "",
+      "source": ""
+    }
+  ],
+
+  "inferences": {
+    "career_stage": {
+      "value": "",
+      "confidence": 0.0,
+      "rationale": "",
+      "supporting_evidence_ids": []
+    },
+
+    "professional_identity": {
+      "value": "",
+      "confidence": 0.0,
+      "rationale": "",
+      "supporting_evidence_ids": []
+    },
+
+    "core_capabilities": [
+      {
+        "value": "",
+        "confidence": 0.0,
+        "rationale": "",
+        "supporting_evidence_ids": []
+      }
+    ],
+
+    "low_confidence_fields": []
+  },
+
+  "reflection": {
+    "summary": "",
+    "what_the_cv_strongly_supports": [],
+    "what_is_unclear": [],
+    "suggested_questions": []
+  }
+}
