@@ -61,18 +61,28 @@ model_call_completed
 json_validation_completed
 mirror_rendered
 
-Log elapsed time for each step. You need to know whether the minute is coming from PDF extraction, Azure round-trip/model latency, JSON validation, rendering, or local app overhead.
+Log elapsed time for each step. You need to know whether the latency is coming from PDF extraction, Azure round-trip/model latency, JSON validation, rendering, or local app overhead.
 
 Sprint 3 acceptance criteria:
 
 User can upload a second CV.
+
 System matches existing roles rather than creating duplicates.
+
 System identifies exact and near-duplicate evidence.
+
 Duplicate evidence gains additional source provenance rather than becoming a new evidence item.
+
 New evidence is added to the correct role.
+
 User can manually add free-form evidence to a selected role.
+
 Manually added evidence is treated like any other evidence source: classified, tagged, and available for inference.
-✓ Each ingestion step logs duration.
-✓ Total ingestion duration is visible in dev mode.
-✓ Text-based two-page CV completes under 10 seconds in deployed Azure environment, or bottleneck is identified.
-✓ Duplicate-detection/reconciliation does not add more than 3 seconds for a second CV of similar size.
+
+Each ingestion step logs duration.
+
+Total ingestion duration is visible in dev mode.
+
+Text-based two-page CV completes under 10 seconds in deployed Azure environment, or bottleneck is identified.
+
+Duplicate-detection/reconciliation does not add more than 3 seconds for a second CV of similar size.
