@@ -31,3 +31,24 @@ No persistence beyond local storage.
 No authentication.
 No multiple CV reconciliation.
 No visualizations beyond the Career Mirror.
+
+Define the source contract
+A source-agnostic envelope covering CVs now and LinkedIn later, with provenance and source locations.
+
+Redesign the DCT schema
+Formal JSON Schema covering facts, roles, evidence, inferences, confidence, rationale, themes, capabilities, and low-confidence fields. I’ll document every change.
+
+Create the controlled tag catalog
+Stable IDs, types, descriptions, and aliases for capabilities and narrative themes.
+
+Build the CV adapter
+Local PDF extraction, normalization, PII minimization, and source traceability. Your CV remains outside Git.
+
+Scaffold orchestration and the Source Adapter Agent
+Python project, configurable Foundry connection, prompt, validation, and a mock provider so the pipeline runs without quota.
+
+Create evaluations
+Schema validation, dangling-reference checks, evidence coverage, provenance, inference support, and a private local expected result based on your CV.
+
+Authenticate with Azure
+Confirm access to the empty Foundry project and capture its non-secret endpoint.
