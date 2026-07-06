@@ -40,8 +40,11 @@ The Reconciliation Agent’s job is:
 “Given newly extracted roles/evidence and the existing Twin, decide what is new, what is duplicate, what is a refinement, and what requires user confirmation.”
 
 For Sprint 3, three statuses are enough:
+
 new
+
 duplicate
+
 possible_duplicate
 
 Sprint 3 performance requirement
