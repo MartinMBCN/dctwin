@@ -6,7 +6,7 @@ Source Adapter
 
         ↓
 
-Evidence Extractor
+Role & Evidence Extractor
 ──────────────────
 "I know how to find professional evidence."
 
