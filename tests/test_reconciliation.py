@@ -134,6 +134,61 @@ def test_reconciliation_merges_similar_capability_hypotheses() -> None:
     assert len(updated["inferences"][0]["supporting_evidence_ids"]) == 2
 
 
+def test_reconciliation_merges_similar_recurring_patterns() -> None:
+    existing = _twin_with_evidence("Built a reusable delivery platform.")
+    existing["reflection"]["strongly_supported"] = [
+        "Designing and implementing scalable operating models and team structures",
+        "Building reusable engineering platforms",
+    ]
+    existing["inferences"] = []
+    incoming = _twin_with_evidence(
+        "Improved governance transparency with metrics.",
+        source_id="src_second_cv",
+    )
+    incoming["reflection"]["strongly_supported"] = [
+        "Designing and implementing scalable operating models and team-of-teams structures",
+        "Building reusable engineering platforms for delivery acceleration",
+    ]
+    incoming["inferences"] = []
+
+    updated, _summary = ReconciliationAgent().reconcile(
+        existing_twin=existing,
+        candidate_twin=incoming,
+    )
+
+    patterns = updated["reflection"]["strongly_supported"]
+    assert len(patterns) == 2
+    assert "Designing and implementing scalable operating models and team-of-teams structures" in patterns
+    assert "Building reusable engineering platforms for delivery acceleration" in patterns
+
+
+def test_reconciliation_merges_recurring_patterns_with_shared_governance_theme() -> None:
+    existing = _twin_with_evidence("Created transparent portfolio governance.")
+    existing["reflection"]["strongly_supported"] = [
+        "Establishing executive governance, metrics, and decision frameworks",
+    ]
+    existing["inferences"] = []
+    incoming = _twin_with_evidence(
+        "Improved reporting and decision clarity.",
+        source_id="src_second_cv",
+    )
+    incoming["reflection"]["strongly_supported"] = [
+        "Establishing governance, metrics, and reporting to create transparency and measurable outcomes",
+    ]
+    incoming["inferences"] = []
+
+    updated, _summary = ReconciliationAgent().reconcile(
+        existing_twin=existing,
+        candidate_twin=incoming,
+    )
+
+    patterns = updated["reflection"]["strongly_supported"]
+    assert len(patterns) == 1
+    assert patterns == [
+        "Establishing governance, metrics, and reporting to create transparency and measurable outcomes"
+    ]
+
+
 def _twin_with_evidence(
     text: str,
     *,

@@ -683,9 +683,45 @@ def _merge_short_lists(*lists: list[str], limit: int) -> list[str]:
         for value in values:
             text = str(value or "").strip()
             key = _normalize(text)
-            if text and key not in seen:
+            if not text:
+                continue
+            match_index = _find_similar_short_text(merged, text)
+            if match_index is not None:
+                merged[match_index] = _preferred_short_text(merged[match_index], text)
+                seen.add(key)
+                continue
+            if key not in seen:
                 merged.append(text)
                 seen.add(key)
             if len(merged) >= limit:
                 return merged
     return merged
+
+
+def _find_similar_short_text(existing: list[str], incoming: str) -> int | None:
+    incoming_tokens = _meaningful_tokens(incoming)
+    for index, value in enumerate(existing):
+        existing_tokens = _meaningful_tokens(value)
+        shared = len(incoming_tokens & existing_tokens)
+        if shared < 3:
+            continue
+        token_score = _jaccard(incoming_tokens, existing_tokens)
+        containment = _containment(incoming_tokens, existing_tokens)
+        text_score = SequenceMatcher(
+            None,
+            _normalize(incoming),
+            _normalize(value),
+        ).ratio()
+        if max(token_score, text_score) >= 0.58 or containment >= 0.5:
+            return index
+    return None
+
+
+def _preferred_short_text(existing: str, incoming: str) -> str:
+    # Prefer the richer phrasing, but avoid replacing a useful short label with
+    # a much longer sentence unless it carries materially more information.
+    existing_tokens = _meaningful_tokens(existing)
+    incoming_tokens = _meaningful_tokens(incoming)
+    if len(incoming_tokens) >= len(existing_tokens) + 2:
+        return incoming
+    return existing
