@@ -65,3 +65,5 @@ It is a living reflection of the current evidence.
 The Twin is the canonical model.
 
 The Mirror is the interface.
+
+User-editable evidence tags: As a user, I can add, edit, or remove tags associated with an evidence item so that the Twin reflects my own understanding of what that evidence demonstrates.
