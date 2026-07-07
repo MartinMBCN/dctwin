@@ -94,10 +94,37 @@ def test_verify_code_promotes_session_twin_and_creates_auth_session(
     assert payload["authenticated"] is True
     assert payload["has_persistent_twin"] is True
     assert payload["user"]["email"] == "user@example.com"
-    assert web._auth_session_payload(payload["session"]["id"])["authenticated"] is True
+    auth_session = web._auth_session_payload(payload["session"]["id"])
+    assert auth_session["authenticated"] is True
+    assert auth_session["has_persistent_twin"] is True
+    assert auth_session["persistent_twin_saved_at"]
 
     state = load_json(tmp_path / web.SESSION_DIR / web.ACCOUNT_FILE)
     assert state["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_session"
+
+
+def test_logout_clears_session_and_cache_but_preserves_account(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    session_id = _sign_in_and_save_twin(monkeypatch, tmp_path, twin_id="twin_saved")
+    cache_file = tmp_path / web.SESSION_DIR / web.CACHE_DIR / "source.candidate.json"
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text("{}", encoding="utf-8")
+
+    payload = web._logout_payload(session_id)
+
+    assert payload == {
+        "authenticated": False,
+        "status": "logged_out",
+        "cleared": ["session", "source_cache"],
+    }
+    assert not (tmp_path / web.SESSION_DIR / web.SESSION_FILE).exists()
+    assert not cache_file.exists()
+    state = load_json(tmp_path / web.SESSION_DIR / web.ACCOUNT_FILE)
+    assert state["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_saved"
+    assert web._auth_session_payload(session_id)["authenticated"] is False
 
 
 def test_verify_code_requires_merge_decision_for_existing_persistent_twin(

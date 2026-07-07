@@ -288,6 +288,11 @@
         state.result = { twin: result.twin, source: { blocks: [] }, reconciliation: null, timings: [] };
         document.querySelector('#result-subtitle').textContent = `${result.source_count} source(s) in local session`;
         render();
+      } else {
+        state.result = null;
+        document.querySelector('#summary').style.display = 'none';
+        document.querySelector('#result-subtitle').textContent = 'Waiting for a source';
+        viewer.innerHTML = '<div class="empty"><div class="empty-inner"><strong>Your session Twin will appear here</strong>Add a CV or pasted CV text to create the first Twin, then add more sources or achievements to update it.</div></div>';
       }
       updateAccountChrome();
     }
@@ -479,7 +484,11 @@
       const response = await apiFetch('/api/auth/session');
       const auth = await response.json();
       state.auth = auth;
-      if (!auth.authenticated) localStorage.removeItem(AUTH_SESSION_KEY);
+      if (auth.authenticated) {
+        localStorage.setItem(KNOWN_ACCOUNT_KEY, '1');
+      } else {
+        localStorage.removeItem(AUTH_SESSION_KEY);
+      }
       updateAccountChrome();
     }
 
@@ -516,8 +525,9 @@
         return;
       }
       if (state.pendingCode) {
-        setAccountHeading('Enter your verification code', 'This confirms the email address that will be used to save or reload your Twin.');
-        accountBody.innerHTML = `<div class="status-card"><strong>Code sent to ${escapeHtml(state.pendingCode.email)}</strong><div class="auth-code">${escapeHtml(state.pendingCode.simulated_code)}</div><div class="subtle">Local development mode shows the code here. In production this would arrive by email.</div></div><div class="field"><label for="auth-code">Verification code</label><input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></div><div class="account-actions"><button class="button" onclick="verifyCode()">Verify and save Twin</button><button class="button secondary" onclick="backToAccountStart()">Use a different email</button></div>`;
+        const signInOnly = state.pendingCode.flow === 'sign_in';
+        setAccountHeading(signInOnly ? 'Enter your sign-in code' : 'Enter your verification code', signInOnly ? 'This confirms your email address and reloads your saved Twin.' : 'This confirms the email address that will be used to save your Twin.');
+        accountBody.innerHTML = `<div class="status-card"><strong>Code sent to ${escapeHtml(state.pendingCode.email)}</strong><div class="auth-code">${escapeHtml(state.pendingCode.simulated_code)}</div><div class="subtle">Local development mode shows the code here. In production this would arrive by email.</div></div><div class="field"><label for="auth-code">Verification code</label><input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></div><div class="account-actions"><button class="button" onclick="verifyCode()">${signInOnly ? 'Sign in' : 'Verify and save Twin'}</button><button class="button secondary" onclick="backToAccountStart()">Use a different email</button></div>`;
         return;
       }
       const knownAccount = localStorage.getItem(KNOWN_ACCOUNT_KEY) === '1';
@@ -547,7 +557,8 @@
       });
       const payload = await response.json();
       if (!response.ok) return notify(payload.error || 'Could not request code');
-      state.pendingCode = { ...payload, duration, timezone };
+      const knownAccount = localStorage.getItem(KNOWN_ACCOUNT_KEY) === '1';
+      state.pendingCode = { ...payload, duration, timezone, flow: knownAccount && !state.result ? 'sign_in' : 'save' };
       state.accountMode = 'code_sent';
       renderAccountModal();
     }
@@ -573,12 +584,13 @@
         return;
       }
       if (!response.ok) return notify(payload.error || 'Could not verify code');
+      const verifiedFlow = state.pendingCode.flow;
       acceptAuthPayload(payload);
       state.pendingCode = null;
       state.accountMode = 'signed_in';
       await loadState();
       renderAccountModal();
-      notify(payload.has_persistent_twin ? 'Digital Career Twin saved' : 'Signed in');
+      notify(verifiedFlow === 'sign_in' ? 'Signed in' : 'Digital Career Twin saved');
     }
 
     async function resolveMerge(strategy) {
@@ -599,11 +611,16 @@
       await apiFetch('/api/auth/logout', { method: 'POST' });
       localStorage.removeItem(AUTH_SESSION_KEY);
       state.auth = { authenticated: false };
+      state.result = null;
+      state.roles = [];
       state.pendingCode = null;
       state.mergeDecision = null;
       state.accountMode = 'start';
+      populateRoles();
+      document.querySelector('#summary').style.display = 'none';
+      document.querySelector('#result-subtitle').textContent = 'Signed out';
+      viewer.innerHTML = '<div class="empty"><div class="empty-inner"><strong>You are signed out</strong>Your session Twin and local source cache were cleared from this browser. Sign in to reload your saved Digital Career Twin.</div></div>';
       updateAccountChrome();
-      render();
       renderAccountModal();
       notify('Logged out');
     }

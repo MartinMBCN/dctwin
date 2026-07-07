@@ -190,13 +190,19 @@ def _auth_session_payload(session_id: str | None) -> dict[str, Any]:
         "session": _public_auth_session(auth_session),
         "user": _public_user(user),
         "has_persistent_twin": persistent is not None,
+        "persistent_twin_saved_at": persistent.get("saved_at") if persistent else None,
     }
 
 
 def _logout_payload(session_id: str | None) -> dict[str, Any]:
     if session_id:
         _account_repository().revoke_session(session_id)
-    return {"authenticated": False, "status": "logged_out"}
+    _reset_session()
+    return {
+        "authenticated": False,
+        "status": "logged_out",
+        "cleared": ["session", "source_cache"],
+    }
 
 
 def _resolve_merge_payload(
