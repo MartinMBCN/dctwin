@@ -120,3 +120,25 @@ Subsequent CV uploads use update language:
 - Rendering your digital twin for presentation
 
 This is deliberately aligned with the architecture: the UI should expose meaningful system progress without exposing internal jargon such as schema validation, transient contracts or orchestration details. Developer-facing timing and reconciliation logs may remain available for tuning.
+
+---
+
+## ADR-011
+Persistent Twin storage starts as repository-backed JSON.
+
+Reason:
+Sprint 4 needs durable account-owned Twins, but there is not yet evidence that the product needs a database server. Local JSON storage is sufficient to prove account creation, login, session expiry, Twin promotion, retrieval and deletion while keeping the storage boundary explicit.
+
+Consequence:
+Persistence code is written against repository-style operations rather than application code directly manipulating files. The Sprint 4 local implementation stores users, auth sessions, login codes and Persistent Twins in ignored JSON state. A future Azure storage or database backend can replace the repository without changing the DCT schema or account flow.
+
+---
+
+## ADR-012
+Passwordless email-code authentication is identity-only.
+
+Reason:
+An account exists to let the user retrieve and preserve their Digital Career Twin; it should not become a source of career evidence. Email verification proves account possession, not professional capability.
+
+Consequence:
+The account layer normalizes verified email addresses, stores one-time-code hashes rather than plaintext codes, creates explicit expiring sessions and links the account to one Persistent Twin. Email candidates extracted from sources remain unverified until the user selects and verifies one. Account deletion deletes the account and Persistent Twin after an explicit confirmation; it does not require a second email-code step in Sprint 4.

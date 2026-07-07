@@ -85,3 +85,49 @@ UI displays current session expiry.
 One-time login codes are single-use and short-lived.
 
 ✓ A user can permanently delete their account and Persistent Twin.
+
+Implementation status — 2026-07-07
+
+Started locally:
+
+- App version moved to `0.2.0` for the account/persistence line.
+- Added ADR-011: Persistent Twin storage starts as repository-backed JSON.
+- Added ADR-012: passwordless email-code authentication is identity-only and separate from career evidence.
+- Added a local account repository scaffold for:
+  - normalized email addresses;
+  - collecting all extracted enrollment email candidates from session sources;
+  - one-time login code generation;
+  - code hashing with salts;
+  - 60-minute expiry;
+  - single-use codes;
+  - newest-code-only verification;
+  - basic email/IP request limiting;
+  - explicit auth sessions with `created_at`, `expires_at`, `revoked_at` and `last_seen_at`;
+  - session expiry at user-local midnight, seven days or one month;
+  - Persistent Twin save/load/delete operations.
+- Added automated tests for the auth/account primitives.
+
+Agreed UX copy:
+
+Unsaved Session Twin navigation warning:
+
+“Are you sure you want to leave without creating an account? Your digital twin will be deleted and cannot be recovered. You will have to rebuild the Twin if you come back later.”
+
+Account deletion confirmation:
+
+“Are you sure? Your digital twin will be deleted and cannot be recovered. You will have to rebuild the Twin if you come back later.”
+
+Post-first-CV callout:
+
+“Create an account to save your Digital Career Twin for the future.”
+
+Still pending:
+
+- Wire the auth repository into local web routes.
+- Add the account creation/login UI.
+- Offer all extracted email candidates during account creation.
+- Simulate local code delivery in the UI/dev log, with optional real email delivery only if a lightweight system mail path is available.
+- Promote Session Twin to Persistent Twin after successful account creation.
+- Retrieve Persistent Twin on login.
+- Ask before merging a Session Twin into an existing Persistent Twin.
+- Add manual logout, session expiry display and account deletion UI.
