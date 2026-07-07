@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 from dctwin import __version__
 from dctwin.adapters import AdapterRegistry, DocxCvAdapter, PdfCvAdapter, adapt_cv_text
 from dctwin.agent import SourceAdapterAgent
+from dctwin.auth import LocalAccountRepository, collect_email_candidates
 from dctwin.foundry import FoundryExtractionTwinProvider, FoundryTwinProvider
 from dctwin.io import load_json, write_json
 from dctwin.reconciliation import ReconciliationAgent
@@ -28,6 +29,7 @@ MAX_TEXT_BYTES = 1 * 1024 * 1024
 SESSION_DIR = ".dctwin-local"
 SESSION_FILE = "session-state.json"
 CACHE_DIR = "cache"
+ACCOUNT_FILE = "accounts.json"
 
 
 def _project_root() -> Path:
@@ -73,6 +75,10 @@ def _local_state_path() -> Path:
     return _project_root() / SESSION_DIR
 
 
+def _account_repository() -> LocalAccountRepository:
+    return LocalAccountRepository(_local_state_path() / ACCOUNT_FILE)
+
+
 def _load_session() -> dict[str, Any]:
     path = _session_path()
     if not path.is_file():
@@ -87,7 +93,16 @@ def _save_session(session: dict[str, Any]) -> None:
 
 
 def _reset_session() -> None:
-    shutil.rmtree(_local_state_path(), ignore_errors=True)
+    _session_path().unlink(missing_ok=True)
+    shutil.rmtree(_local_state_path() / CACHE_DIR, ignore_errors=True)
+
+
+def _reset_session_twin_only() -> None:
+    session = _load_session()
+    session["twin"] = None
+    session["source_documents"] = []
+    session["enrollment_documents"] = []
+    _save_session(session)
 
 
 def _manual_cv_label() -> str:
@@ -109,6 +124,253 @@ def _append_source_document(
     if any(item.get("source_id") == source_document.get("source_id") for item in source_documents):
         return source_documents
     return [*source_documents, source_document]
+
+
+def _auth_candidates_payload() -> dict[str, Any]:
+    session = _load_session()
+    return {
+        "candidates": collect_email_candidates(session.get("enrollment_documents", [])),
+        "has_session_twin": bool(session.get("twin")),
+    }
+
+
+def _request_code_payload(
+    *,
+    email: str,
+    ip_address: str,
+) -> dict[str, Any]:
+    delivery = _account_repository().request_login_code(
+        email=email,
+        ip_address=ip_address,
+    )
+    return {
+        "email": delivery.email,
+        "expires_at": delivery.expires_at,
+        "delivery_mode": delivery.delivery_mode,
+        "simulated_code": delivery.code,
+    }
+
+
+def _verify_code_payload(
+    *,
+    email: str,
+    code: str,
+    duration: str,
+    timezone: str,
+    merge_strategy: str | None = None,
+) -> tuple[HTTPStatus, dict[str, Any]]:
+    repo = _account_repository()
+    user = repo.verify_login_code(email=email, code=code)
+    auth_session = repo.create_session(
+        user_id=user["id"],
+        duration=_session_duration(duration),
+        timezone=timezone or "UTC",
+    )
+    return _post_auth_payload(
+        repo=repo,
+        user=user,
+        auth_session=auth_session,
+        merge_strategy=merge_strategy,
+    )
+
+
+def _auth_session_payload(session_id: str | None) -> dict[str, Any]:
+    if not session_id:
+        return {"authenticated": False}
+    repo = _account_repository()
+    auth_session = repo.get_session(session_id)
+    if auth_session is None:
+        return {"authenticated": False}
+    user = repo.get_user(user_id=auth_session["user_id"])
+    if user is None:
+        return {"authenticated": False}
+    persistent = repo.load_persistent_twin(user_id=user["id"])
+    return {
+        "authenticated": True,
+        "session": _public_auth_session(auth_session),
+        "user": _public_user(user),
+        "has_persistent_twin": persistent is not None,
+    }
+
+
+def _logout_payload(session_id: str | None) -> dict[str, Any]:
+    if session_id:
+        _account_repository().revoke_session(session_id)
+    return {"authenticated": False, "status": "logged_out"}
+
+
+def _resolve_merge_payload(
+    *,
+    session_id: str | None,
+    merge_strategy: str,
+) -> tuple[HTTPStatus, dict[str, Any]]:
+    if not session_id:
+        return HTTPStatus.UNAUTHORIZED, {"error": "Sign in before resolving Twin merge"}
+    repo = _account_repository()
+    auth_session = repo.get_session(session_id)
+    if auth_session is None:
+        return HTTPStatus.UNAUTHORIZED, {"error": "Session expired; sign in again"}
+    user = repo.get_user(user_id=auth_session["user_id"])
+    if user is None:
+        return HTTPStatus.UNAUTHORIZED, {"error": "Account no longer exists"}
+    return _post_auth_payload(
+        repo=repo,
+        user=user,
+        auth_session=auth_session,
+        merge_strategy=merge_strategy,
+    )
+
+
+def _delete_account_payload(
+    *,
+    session_id: str | None,
+    confirmation: str,
+) -> tuple[HTTPStatus, dict[str, Any]]:
+    expected = (
+        "Are you sure? Your digital twin will be deleted and cannot be recovered. "
+        "You will have to rebuild the Twin if you come back later."
+    )
+    if confirmation != expected:
+        return HTTPStatus.BAD_REQUEST, {"error": "Account deletion confirmation did not match"}
+    repo = _account_repository()
+    if not session_id:
+        return HTTPStatus.UNAUTHORIZED, {"error": "Sign in before deleting your account"}
+    auth_session = repo.get_session(session_id)
+    if auth_session is None:
+        return HTTPStatus.UNAUTHORIZED, {"error": "Session expired; sign in again"}
+    repo.delete_account(user_id=auth_session["user_id"])
+    _reset_session_twin_only()
+    return HTTPStatus.OK, {"status": "deleted"}
+
+
+def _post_auth_payload(
+    *,
+    repo: LocalAccountRepository,
+    user: dict[str, Any],
+    auth_session: dict[str, Any],
+    merge_strategy: str | None,
+) -> tuple[HTTPStatus, dict[str, Any]]:
+    if merge_strategy not in {None, "merge_session", "discard_session"}:
+        raise ValueError("Choose merge_session or discard_session")
+    local_session = _load_session()
+    persistent = repo.load_persistent_twin(user_id=user["id"])
+    has_session_twin = bool(local_session.get("twin"))
+    if has_session_twin and persistent is not None and merge_strategy is None:
+        return HTTPStatus.CONFLICT, {
+            "status": "merge_decision_required",
+            "message": "Choose whether to merge this session Twin into your saved Twin.",
+            "session": _public_auth_session(auth_session),
+            "user": _public_user(user),
+            "options": ["merge_session", "discard_session"],
+        }
+
+    if has_session_twin and (persistent is None or merge_strategy == "merge_session"):
+        record = _persistent_record_from_session(
+            repo=repo,
+            user_id=user["id"],
+            local_session=local_session,
+            existing=persistent,
+        )
+    elif persistent is not None:
+        record = persistent
+        _save_session(
+            {
+                "twin": persistent["twin"],
+                "source_documents": persistent.get("source_documents", []),
+                "enrollment_documents": persistent.get("enrollment_documents", []),
+            }
+        )
+    else:
+        record = None
+
+    return HTTPStatus.OK, {
+        "authenticated": True,
+        "session": _public_auth_session(auth_session),
+        "user": _public_user(user),
+        "has_persistent_twin": record is not None,
+        "persistent_twin_saved_at": record.get("saved_at") if record else None,
+    }
+
+
+def _persistent_record_from_session(
+    *,
+    repo: LocalAccountRepository,
+    user_id: str,
+    local_session: dict[str, Any],
+    existing: dict[str, Any] | None,
+) -> dict[str, Any]:
+    twin = local_session["twin"]
+    source_documents = local_session.get("source_documents", [])
+    enrollment_documents = local_session.get("enrollment_documents", [])
+    if existing is not None:
+        twin, _summary = ReconciliationAgent().reconcile(
+            existing_twin=existing.get("twin"),
+            candidate_twin=twin,
+        )
+        source_documents = _merge_documents(
+            existing.get("source_documents", []),
+            source_documents,
+            key="source_id",
+        )
+        enrollment_documents = _merge_documents(
+            existing.get("enrollment_documents", []),
+            enrollment_documents,
+            key="source_id",
+        )
+        contracts = _contracts()
+        validate_twin(
+            twin,
+            contracts["twin"],
+            contracts["catalog"],
+            source_documents=source_documents,
+        )
+        _save_session(
+            {
+                "twin": twin,
+                "source_documents": source_documents,
+                "enrollment_documents": enrollment_documents,
+            }
+        )
+    return repo.save_persistent_twin(
+        user_id=user_id,
+        twin=twin,
+        source_documents=source_documents,
+        enrollment_documents=enrollment_documents,
+    )
+
+
+def _merge_documents(
+    existing: list[dict[str, Any]],
+    incoming: list[dict[str, Any]],
+    *,
+    key: str,
+) -> list[dict[str, Any]]:
+    merged = list(existing)
+    seen = {item.get(key) for item in merged}
+    for item in incoming:
+        if item.get(key) not in seen:
+            merged.append(item)
+            seen.add(item.get(key))
+    return merged
+
+
+def _public_auth_session(session: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": session["id"],
+        "created_at": session["created_at"],
+        "expires_at": session["expires_at"],
+        "last_seen_at": session["last_seen_at"],
+    }
+
+
+def _public_user(user: dict[str, Any]) -> dict[str, Any]:
+    return {"id": user["id"], "email": user["email"]}
+
+
+def _session_duration(value: str) -> Any:
+    if value not in {"midnight", "7_days", "1_month"}:
+        raise ValueError("Choose a session duration: midnight, 7_days or 1_month")
+    return value
 
 
 def _cache_path(source_document: dict[str, Any]) -> Path:
@@ -176,6 +438,10 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                     "source_count": len(session.get("source_documents", [])),
                 },
             )
+        elif self.path == "/api/auth/candidates":
+            self._send_json(HTTPStatus.OK, _auth_candidates_payload())
+        elif self.path == "/api/auth/session":
+            self._send_json(HTTPStatus.OK, _auth_session_payload(self._auth_session_id()))
         else:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
 
@@ -192,9 +458,88 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {"status": "reset", "cleared": ["session", "source_cache"]},
             )
+        elif self.path == "/api/auth/request-code":
+            self._handle_auth_request_code()
+        elif self.path == "/api/auth/verify-code":
+            self._handle_auth_verify_code()
+        elif self.path == "/api/auth/resolve-merge":
+            self._handle_auth_resolve_merge()
+        elif self.path == "/api/auth/logout":
+            self._send_json(HTTPStatus.OK, _logout_payload(self._auth_session_id()))
+        elif self.path == "/api/account/delete":
+            self._handle_account_delete()
         else:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return
+
+    def _handle_auth_request_code(self) -> None:
+        try:
+            payload = self._read_json_body(max_bytes=MAX_TEXT_BYTES)
+            self._send_json(
+                HTTPStatus.OK,
+                _request_code_payload(
+                    email=str(payload.get("email", "")),
+                    ip_address=self._client_ip(),
+                ),
+            )
+        except Exception as exc:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": f"Could not request a login code: {exc}"},
+            )
+
+    def _handle_auth_verify_code(self) -> None:
+        try:
+            payload = self._read_json_body(max_bytes=MAX_TEXT_BYTES)
+            status, response = _verify_code_payload(
+                email=str(payload.get("email", "")),
+                code=str(payload.get("code", "")),
+                duration=str(payload.get("duration", "7_days")),
+                timezone=str(payload.get("timezone", "UTC")),
+                merge_strategy=payload.get("merge_strategy"),
+            )
+            self._send_json(status, response)
+        except Exception as exc:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": f"Could not verify the login code: {exc}"},
+            )
+
+    def _handle_account_delete(self) -> None:
+        try:
+            payload = self._read_json_body(max_bytes=MAX_TEXT_BYTES)
+            status, response = _delete_account_payload(
+                session_id=self._auth_session_id(),
+                confirmation=str(payload.get("confirmation", "")),
+            )
+            self._send_json(status, response)
+        except Exception as exc:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": f"Could not delete the account: {exc}"},
+            )
+
+    def _handle_auth_resolve_merge(self) -> None:
+        try:
+            payload = self._read_json_body(max_bytes=MAX_TEXT_BYTES)
+            status, response = _resolve_merge_payload(
+                session_id=self._auth_session_id(),
+                merge_strategy=str(payload.get("merge_strategy", "")),
+            )
+            self._send_json(status, response)
+        except Exception as exc:
+            self._send_json(
+                HTTPStatus.BAD_REQUEST,
+                {"error": f"Could not resolve the Twin merge choice: {exc}"},
+            )
+
+    def _auth_session_id(self) -> str | None:
+        value = self.headers.get("X-DCTWIN-Session", "").strip()
+        return value or None
+
+    def _client_ip(self) -> str:
+        host, _port = self.client_address
+        return host
 
     def _handle_file_adapt(self) -> None:
         if self.headers.get("X-DCTWIN-Local") != "1":

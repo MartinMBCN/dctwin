@@ -106,6 +106,17 @@ Started locally:
   - session expiry at user-local midnight, seven days or one month;
   - Persistent Twin save/load/delete operations.
 - Added automated tests for the auth/account primitives.
+- Added local web route scaffolding for:
+  - retrieving email candidates;
+  - requesting a simulated login code;
+  - verifying a login code and creating an auth session;
+  - promoting a Session Twin to a Persistent Twin;
+  - detecting the existing Persistent Twin + Session Twin merge-choice edge case;
+  - resolving that merge choice without reusing the one-time code;
+  - checking auth session state;
+  - logging out;
+  - deleting the account after exact confirmation.
+- Added automated tests for the local auth route helper layer.
 
 Agreed UX copy:
 
@@ -123,11 +134,9 @@ Post-first-CV callout:
 
 Still pending:
 
-- Wire the auth repository into local web routes.
 - Add the account creation/login UI.
 - Offer all extracted email candidates during account creation.
 - Simulate local code delivery in the UI/dev log, with optional real email delivery only if a lightweight system mail path is available.
-- Promote Session Twin to Persistent Twin after successful account creation.
-- Retrieve Persistent Twin on login.
-- Ask before merging a Session Twin into an existing Persistent Twin.
+- Retrieve Persistent Twin on login through the UI.
+- Ask before merging a Session Twin into an existing Persistent Twin through the UI.
 - Add manual logout, session expiry display and account deletion UI.

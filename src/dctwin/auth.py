@@ -200,6 +200,11 @@ class LocalAccountRepository:
             return session
         return None
 
+    def get_user(self, *, user_id: str) -> dict[str, Any] | None:
+        state = self._load()
+        user = self._user_for_id(state, user_id)
+        return None if user is None else dict(user)
+
     def revoke_session(
         self,
         session_id: str,
