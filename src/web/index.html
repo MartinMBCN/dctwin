@@ -75,6 +75,19 @@
     .block { border-left: 3px solid #a9cbbb; padding: 4px 0 4px 14px; margin-bottom: 20px; }
     .block-label { color: var(--green); font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
     .block-text { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.65; color: #33413b; }
+    .role-card { border: 1px solid var(--line); border-radius: 16px; background: #fffefa; margin-bottom: 14px; overflow: hidden; }
+    .role-card summary { cursor: pointer; list-style: none; padding: 15px 16px; }
+    .role-card summary::-webkit-details-marker { display: none; }
+    .role-card summary::after { content: "View achievements"; float: right; color: var(--green); font-size: 12px; font-weight: 750; margin-top: 3px; }
+    .role-card[open] summary::after { content: "Hide achievements"; }
+    .role-body { border-top: 1px solid var(--line); padding: 14px 16px 2px; background: #faf9f4; }
+    .achievement { border-left: 3px solid #e3c789; padding: 3px 0 12px 13px; margin-bottom: 14px; }
+    .achievement-text { color: #25332e; margin-bottom: 8px; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+    .chip { border: 1px solid #cbd8d1; background: white; border-radius: 99px; color: #40514a; padding: 3px 8px; font-size: 12px; }
+    .chip.capability { border-color: #a8c9bc; background: var(--green-soft); color: var(--green); }
+    .chip.theme { border-color: #e3c789; background: var(--amber-soft); color: #704b10; }
+    .quote { color: var(--muted); font-style: italic; margin-top: 7px; }
     .candidate { background: var(--green-soft); border: 1px solid #bbd6cb; border-radius: 14px; padding: 16px; margin-bottom: 12px; }
     .candidate code { color: var(--green); font-size: 15px; }
     .status-card { padding: 18px; border: 1px solid #e3c789; background: var(--amber-soft); border-radius: 14px; margin-bottom: 12px; }
@@ -397,11 +410,47 @@
       } else {
         const twin = state.result.twin;
         const inferenceCards = (twin.inferences || []).map(item => `<div class="candidate"><div class="subtle">${escapeHtml(item.kind.replaceAll('_', ' '))} · ${Math.round(item.confidence * 100)}% confidence</div><strong>${escapeHtml(item.value)}</strong><div class="subtle" style="margin-top:7px">${escapeHtml(item.rationale)}</div></div>`).join('');
-        const roles = (twin.roles || []).map(role => `<div class="block"><div class="block-label">${escapeHtml(role.start_date || '?')} — ${escapeHtml(role.end_date || 'present')}</div><strong>${escapeHtml(role.title)}</strong><div class="subtle">${escapeHtml(role.organization)}</div></div>`).join('');
+        const evidenceByRole = groupEvidenceByRole(twin.evidence_items || []);
+        const showSourceQuotes = (twin.sources || []).length > 1;
+        const roles = (twin.roles || []).map(role => renderRoleWithAchievements(role, evidenceByRole.get(role.id) || [], showSourceQuotes)).join('');
         const patterns = (twin.reflection.strongly_supported || []).map(item => `<div class="block"><div class="block-text">${escapeHtml(item)}</div></div>`).join('');
         const questions = (twin.reflection.suggested_questions || []).map(item => `<div class="status-card"><strong>Question</strong>${escapeHtml(item)}</div>`).join('');
         viewer.innerHTML = `<section style="margin-bottom:24px"><div class="eyebrow">Reflection</div><h2 style="font-family:Georgia,serif;font-weight:500;font-size:27px;margin:7px 0 10px">${escapeHtml(twin.reflection.summary)}</h2></section><section><div class="eyebrow" style="margin-bottom:10px">Current hypotheses</div>${inferenceCards || '<p class="subtle">No cross-evidence inferences yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Recurring patterns</div>${patterns || '<p class="subtle">No recurring patterns yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Questions to resolve</div>${questions || '<p class="subtle">No open questions yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Career timeline</div>${roles}</section>`;
       }
+    }
+
+    function groupEvidenceByRole(items) {
+      const grouped = new Map();
+      for (const item of items) {
+        const key = item.role_id || '__unassigned__';
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(item);
+      }
+      return grouped;
+    }
+
+    function renderRoleWithAchievements(role, achievements, showSourceQuotes) {
+      const count = achievements.length;
+      const body = count
+        ? achievements.map(item => renderAchievement(item, showSourceQuotes)).join('')
+        : '<p class="subtle">No achievements are currently attached to this role.</p>';
+      return `<details class="role-card" open><summary><div class="block-label">${escapeHtml(role.start_date || '?')} — ${escapeHtml(role.end_date || 'present')} · ${count} achievement${count === 1 ? '' : 's'}</div><strong>${escapeHtml(role.title)}</strong><div class="subtle">${escapeHtml(role.organization)}</div>${role.summary ? `<div class="subtle" style="margin-top:6px">${escapeHtml(role.summary)}</div>` : ''}</summary><div class="role-body">${body}</div></details>`;
+    }
+
+    function renderAchievement(item, showSourceQuotes) {
+      const capabilities = (item.tag_assignments?.capabilities || []).map(tag => renderTag(tag, 'capability')).join('');
+      const themes = (item.tag_assignments?.narrative_themes || []).map(tag => renderTag(tag, 'theme')).join('');
+      const quote = (item.source_refs || []).find(ref => ref.quote)?.quote;
+      return `<article class="achievement"><div class="block-label">${escapeHtml((item.type || 'achievement').replaceAll('_', ' '))}</div><div class="achievement-text">${escapeHtml(item.text)}</div><div class="chip-row">${capabilities}${themes}</div>${showSourceQuotes && quote ? `<div class="quote">“${escapeHtml(quote)}”</div>` : ''}</article>`;
+    }
+
+    function renderTag(tag, kind) {
+      const confidence = typeof tag.confidence === 'number' ? ` · ${Math.round(tag.confidence * 100)}%` : '';
+      return `<span class="chip ${kind}" title="${escapeAttr(tag.rationale || '')}">${escapeHtml(prettyTag(tag.tag_id))}${confidence}</span>`;
+    }
+
+    function prettyTag(tagId) {
+      return String(tagId || '').replace(/^tag_/, '').replaceAll('_', ' ');
     }
 
     function escapeHtml(value) { const node = document.createElement('div'); node.textContent = String(value); return node.innerHTML; }
