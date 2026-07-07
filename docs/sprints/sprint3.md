@@ -134,6 +134,7 @@ Completed locally:
 - Automated tests for pasted CV adaptation, duplicate reconciliation and adding an achievement.
 - Track A first pass: staged extraction provider that asks the model for compact roles and achievements, then maps deterministically into the full DCT schema.
 - Source-derived candidate Twin cache keyed by content hash, with `DCTWIN_MODEL_PATH=full` retained for comparison against the older one-shot path.
+- Track B first pass: the local UI now explains extraction, compact interpretation, deterministic Twin construction and validation during the wait.
 
 Addendum: Performance strategy
 
@@ -142,6 +143,26 @@ Track A — Reduce actual latency
 - Add deterministic source preview before model invocation.
 - Cache source-derived outputs by content hash.
 - Regenerate only changed Twin projections where possible.
+- Split extraction from canonical mapping: the model emits a transient `CVExtractionResult`, and the application constructs the canonical DCT.
+
+Model responsibility:
+
+- identify roles;
+- extract evidence / achievements;
+- preserve source text and snippets;
+- classify lightly where useful;
+- provide compact interpretation when needed for the Mirror.
+
+Application responsibility:
+
+- create source records;
+- assign stable IDs;
+- map roles and evidence into the DCT schema;
+- enforce schema validity;
+- reconcile against the existing Twin;
+- update canonical inferences and reflection.
+
+The full DCT schema remains the acceptance boundary, not the default model-generation contract. `CVExtractionResult` is transient and must die after deterministic mapping; it must not become a competing domain model.
 
 Track B — Improve perceived latency
 - Replace blocking spinner with staged progress.

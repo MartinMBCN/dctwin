@@ -79,6 +79,13 @@
     .candidate code { color: var(--green); font-size: 15px; }
     .status-card { padding: 18px; border: 1px solid #e3c789; background: var(--amber-soft); border-radius: 14px; margin-bottom: 12px; }
     .status-card strong { display: block; color: #704b10; margin-bottom: 5px; }
+    .stage-list { display: grid; gap: 10px; text-align: left; margin-top: 18px; }
+    .stage-row { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; padding: 11px 12px; border-radius: 12px; background: #f1f3ee; color: var(--muted); }
+    .stage-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; background: #b6c0ba; box-shadow: 0 0 0 4px rgba(104,117,111,.1); }
+    .stage-row.active { background: var(--green-soft); color: var(--ink); }
+    .stage-row.active .stage-dot { background: #2b9b73; box-shadow: 0 0 0 4px rgba(43,155,115,.15); }
+    .stage-row.complete .stage-dot { background: var(--green); }
+    .stage-row strong { display: block; color: var(--ink); }
     pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; color: #33413b; }
     .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: #17231f; color: white; border-radius: 10px; padding: 11px 15px; transition: .2s ease; box-shadow: var(--shadow); }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -177,7 +184,14 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script>
-    const state = { tab: 'mirror', result: null, roles: [] };
+    const busyStages = [
+      { at: 0, title: 'Reading your CV', detail: 'Extracting text and separating direct contact details.' },
+      { at: 1200, title: 'Getting roles and achievements', detail: 'Asking the model for transient CVExtractionResult, not the canonical Twin.' },
+      { at: 7000, title: 'Inferring skills and recurring patterns', detail: 'Adding a compact interpretation while the application keeps ownership of the DCT.' },
+      { at: 16000, title: 'Constructing the Twin', detail: 'Creating stable IDs, mapping provenance, and validating the DCT schema.' },
+      { at: 26000, title: 'Still working carefully', detail: 'This run is over the UX target; timings will show exactly where the delay lives.' }
+    ];
+    const state = { tab: 'mirror', result: null, roles: [], busyTimer: null, busyStarted: 0 };
     const input = document.querySelector('#file-input');
     const dropZone = document.querySelector('#drop-zone');
     const viewer = document.querySelector('#viewer');
@@ -278,6 +292,7 @@
     }
 
     async function resetSession() {
+      stopBusySequence();
       await fetch('/api/reset', { method: 'POST', headers: { 'X-DCTWIN-Local': '1' } });
       state.result = null;
       state.roles = [];
@@ -290,6 +305,7 @@
     }
 
     async function acceptResponse(response, label) {
+      stopBusySequence();
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Request failed');
       state.result = result;
@@ -323,12 +339,37 @@
     }
 
     function setBusy(message) {
-      document.querySelector('#result-subtitle').textContent = message;
-      viewer.innerHTML = `<div class="empty"><div class="empty-inner"><strong>${escapeHtml(message)}</strong>Extracting source text, invoking the agent where needed, reconciling against the session Twin, and validating the result.</div></div>`;
+      startBusySequence(message);
       document.querySelector('#stage-source').classList.add('active');
     }
 
+    function startBusySequence(message) {
+      stopBusySequence();
+      state.busyStarted = Date.now();
+      document.querySelector('#result-subtitle').textContent = message;
+      renderBusyStage(0, message);
+      state.busyTimer = setInterval(() => {
+        const elapsed = Date.now() - state.busyStarted;
+        const index = busyStages.reduce((current, stage, candidateIndex) => elapsed >= stage.at ? candidateIndex : current, 0);
+        renderBusyStage(index, message);
+      }, 500);
+    }
+
+    function stopBusySequence() {
+      if (state.busyTimer) clearInterval(state.busyTimer);
+      state.busyTimer = null;
+    }
+
+    function renderBusyStage(activeIndex, message) {
+      const rows = busyStages.map((stage, index) => {
+        const status = index < activeIndex ? 'complete' : index === activeIndex ? 'active' : '';
+        return `<div class="stage-row ${status}"><span class="stage-dot"></span><div><strong>${escapeHtml(stage.title)}</strong>${escapeHtml(stage.detail)}</div></div>`;
+      }).join('');
+      viewer.innerHTML = `<div class="empty"><div class="empty-inner"><strong>${escapeHtml(message)}</strong>This is split into extraction, interpretation, deterministic Twin construction, and validation.<div class="stage-list">${rows}</div></div></div>`;
+    }
+
     function showError(error) {
+      stopBusySequence();
       document.querySelector('#result-subtitle').textContent = 'Update failed';
       viewer.innerHTML = `<div class="empty"><div class="empty-inner"><strong>Could not update the Twin</strong>${escapeHtml(error.message)}</div></div>`;
     }
@@ -357,7 +398,9 @@
         const twin = state.result.twin;
         const inferenceCards = (twin.inferences || []).map(item => `<div class="candidate"><div class="subtle">${escapeHtml(item.kind.replaceAll('_', ' '))} · ${Math.round(item.confidence * 100)}% confidence</div><strong>${escapeHtml(item.value)}</strong><div class="subtle" style="margin-top:7px">${escapeHtml(item.rationale)}</div></div>`).join('');
         const roles = (twin.roles || []).map(role => `<div class="block"><div class="block-label">${escapeHtml(role.start_date || '?')} — ${escapeHtml(role.end_date || 'present')}</div><strong>${escapeHtml(role.title)}</strong><div class="subtle">${escapeHtml(role.organization)}</div></div>`).join('');
-        viewer.innerHTML = `<section style="margin-bottom:24px"><div class="eyebrow">Reflection</div><h2 style="font-family:Georgia,serif;font-weight:500;font-size:27px;margin:7px 0 10px">${escapeHtml(twin.reflection.summary)}</h2></section><section><div class="eyebrow" style="margin-bottom:10px">Current hypotheses</div>${inferenceCards || '<p class="subtle">No cross-evidence inferences yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Career timeline</div>${roles}</section>`;
+        const patterns = (twin.reflection.strongly_supported || []).map(item => `<div class="block"><div class="block-text">${escapeHtml(item)}</div></div>`).join('');
+        const questions = (twin.reflection.suggested_questions || []).map(item => `<div class="status-card"><strong>Question</strong>${escapeHtml(item)}</div>`).join('');
+        viewer.innerHTML = `<section style="margin-bottom:24px"><div class="eyebrow">Reflection</div><h2 style="font-family:Georgia,serif;font-weight:500;font-size:27px;margin:7px 0 10px">${escapeHtml(twin.reflection.summary)}</h2></section><section><div class="eyebrow" style="margin-bottom:10px">Current hypotheses</div>${inferenceCards || '<p class="subtle">No cross-evidence inferences yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Recurring patterns</div>${patterns || '<p class="subtle">No recurring patterns yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Questions to resolve</div>${questions || '<p class="subtle">No open questions yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Career timeline</div>${roles}</section>`;
       }
     }
 

@@ -89,7 +89,11 @@ def build_twin_from_extraction(
             }
         )
 
-    inferences = _inferences(evidence_items)
+    interpretation = extraction.get("interpretation", {})
+    inferences = _inferences(
+        evidence_items=evidence_items,
+        capability_hypotheses=interpretation.get("capability_hypotheses", []),
+    )
     gaps = []
     if not roles:
         gaps.append(
@@ -121,17 +125,12 @@ def build_twin_from_extraction(
         "evidence_items": evidence_items,
         "inferences": inferences,
         "gaps": gaps,
-        "reflection": {
-            "summary": (
-                f"This staged extraction found {len(evidence_items)} achievement"
-                f"{'' if len(evidence_items) == 1 else 's'} across {len(roles)} role"
-                f"{'' if len(roles) == 1 else 's'}. Capabilities and themes are "
-                "assigned deterministically as a fast first pass."
-            ),
-            "strongly_supported": [item["text"] for item in evidence_items[:5]],
-            "unclear": [gap["resolution_question"] for gap in gaps],
-            "suggested_questions": [gap["resolution_question"] for gap in gaps],
-        },
+        "reflection": _reflection(
+            evidence_items=evidence_items,
+            gaps=gaps,
+            interpretation=interpretation,
+            role_count=len(roles),
+        ),
     }
 
 
@@ -226,9 +225,39 @@ def _mapped_role_id(
     return None
 
 
-def _inferences(evidence_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _inferences(
+    *,
+    evidence_items: list[dict[str, Any]],
+    capability_hypotheses: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     if not evidence_items:
         return []
+    inferences: list[dict[str, Any]] = []
+    for hypothesis in capability_hypotheses:
+        support = _evidence_ids_for_indexes(
+            evidence_items,
+            hypothesis.get("supporting_achievement_indexes", []),
+        )
+        if not support:
+            continue
+        value = str(hypothesis.get("value") or "").strip()
+        if not value:
+            continue
+        inferences.append(
+            {
+                "id": _unique_id("inf", f"capability {value}", {item["id"] for item in inferences}),
+                "kind": "capability",
+                "value": value,
+                "confidence": _confidence(hypothesis.get("confidence"), default=0.6),
+                "rationale": hypothesis.get("rationale") or "Compact interpretation from staged extraction.",
+                "supporting_evidence_ids": support,
+                "alternatives": hypothesis.get("alternatives") or [],
+                "status": "proposed",
+            }
+        )
+    if inferences:
+        return inferences
+
     by_capability: dict[str, list[str]] = {}
     for item in evidence_items:
         for assignment in item["tag_assignments"]["capabilities"]:
@@ -246,6 +275,58 @@ def _inferences(evidence_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "status": "proposed",
         }
     ]
+
+
+def _reflection(
+    *,
+    evidence_items: list[dict[str, Any]],
+    gaps: list[dict[str, Any]],
+    interpretation: dict[str, Any],
+    role_count: int,
+) -> dict[str, Any]:
+    summary = str(interpretation.get("reflection_summary") or "").strip()
+    if not summary:
+        summary = (
+            f"This staged extraction found {len(evidence_items)} achievement"
+            f"{'' if len(evidence_items) == 1 else 's'} across {role_count} role"
+            f"{'' if role_count == 1 else 's'}. A deeper interpretation is still needed."
+        )
+    patterns = [
+        str(pattern.get("text") or "").strip()
+        for pattern in interpretation.get("recurring_patterns", [])
+        if str(pattern.get("text") or "").strip()
+    ]
+    unclear = [
+        str(question).strip()
+        for question in interpretation.get("unclear_questions", [])
+        if str(question).strip()
+    ]
+    fallback_unclear = [
+        gap["resolution_question"]
+        for gap in gaps
+        if gap.get("resolution_question")
+    ]
+    return {
+        "summary": summary,
+        "strongly_supported": patterns or [item["text"] for item in evidence_items[:5]],
+        "unclear": unclear or fallback_unclear,
+        "suggested_questions": unclear or fallback_unclear,
+    }
+
+
+def _evidence_ids_for_indexes(
+    evidence_items: list[dict[str, Any]],
+    indexes: list[Any],
+) -> list[str]:
+    evidence_ids: list[str] = []
+    for raw_index in indexes:
+        try:
+            index = int(raw_index)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= index < len(evidence_items):
+            evidence_ids.append(evidence_items[index]["id"])
+    return evidence_ids
 
 
 def _date_or_none(value: Any) -> str | None:

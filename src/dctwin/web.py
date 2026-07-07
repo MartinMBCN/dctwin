@@ -433,6 +433,32 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             },
             "reconciliation": reconciliation,
             "timings": timings,
+            "stages": [
+                {
+                    "id": "source_preview",
+                    "label": "Reading your CV",
+                    "status": "complete",
+                    "detail": f"Normalized {len(source_document['blocks'])} source block(s).",
+                },
+                {
+                    "id": "model_extraction",
+                    "label": "Getting roles and achievements",
+                    "status": "complete",
+                    "detail": f"Found {len(twin.get('roles', []))} role(s) and {len(twin.get('evidence_items', []))} achievement(s).",
+                },
+                {
+                    "id": "interpretation",
+                    "label": "Inferring key skills and patterns",
+                    "status": "complete",
+                    "detail": f"Created {len(twin.get('inferences', []))} current hypothesis/hypotheses.",
+                },
+                {
+                    "id": "rendering",
+                    "label": "Rendering the Career Twin",
+                    "status": "complete",
+                    "detail": "Validated and rendered the session Twin.",
+                },
+            ],
             "agent": {"status": "complete", "message": message},
         }
 

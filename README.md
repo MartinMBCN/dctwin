@@ -16,7 +16,11 @@ CV source or user-entered achievement
       → minimized normalized source document
       → private unverified enrollment candidates
   → Source Adapter Agent / model provider
-  → candidate Digital Career Twin
+  → transient CVExtractionResult
+  → deterministic DCT builder
+      → stable IDs
+      → canonical source references
+      → full Digital Career Twin schema
   → Reconciliation Agent
       → add new evidence
       → merge duplicate provenance
@@ -83,7 +87,7 @@ When the Foundry environment variables are set, the preview can create and updat
 
 The session Twin is stored in ignored local development state under `.dctwin-local/`. This is not account persistence.
 
-By default, the local Foundry path uses staged extraction: the model extracts compact roles and achievements, then deterministic code maps that into the full DCT schema. Set `DCTWIN_MODEL_PATH=full` to compare against the older one-shot full-DCT generation path. Source-derived candidates are cached by content hash under `.dctwin-local/cache/`.
+By default, the local Foundry path uses staged extraction: the model emits a transient `CVExtractionResult` containing compact roles, achievements, source snippets and interpretation, then deterministic code maps that into the full DCT schema. Set `DCTWIN_MODEL_PATH=full` to compare against the older one-shot full-DCT generation path. Source-derived candidates are cached by content hash under `.dctwin-local/cache/`.
 
 ## Privacy
 

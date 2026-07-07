@@ -205,7 +205,7 @@ class FoundryTwinProvider:
 
 
 class FoundryExtractionTwinProvider(FoundryTwinProvider):
-    """Faster provider: model extracts roles/achievements; code builds the DCT."""
+    """Model emits transient CVExtractionResult; application builds the DCT."""
 
     def generate(
         self,
@@ -228,8 +228,8 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
             "current_utc": datetime.now(UTC).isoformat(),
             "task": (
                 "Extract only compact CV structure: person name if clearly stated, "
-                "roles, and achievement/responsibility claims. Do not infer "
-                "capabilities, themes, gaps, reflections, or full DCT structure."
+                "roles, achievement/responsibility claims, and a compact interpretation. "
+                "Do not produce the full DCT structure."
             ),
             "normalized_source_document": source_document,
         }
@@ -239,18 +239,20 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
                 "You are the fast extraction stage for a Digital Career Twin. "
                 "Return compact, source-grounded JSON only. Extract all clear roles "
                 "and material achievements/responsibilities, preserving source block "
-                "references and quotes. Do not produce the full DCT schema."
+                "references and quotes. Also provide a concise interpretation: recurring "
+                "patterns, capability hypotheses, unclear questions, and a reflective "
+                "summary. Do not produce the full DCT schema."
             ),
             input=json.dumps(request, ensure_ascii=False),
             reasoning={"effort": "minimal"},
-            max_output_tokens=4_000,
+            max_output_tokens=5_000,
             store=False,
             text={
                 "verbosity": "low",
                 "format": {
                     "type": "json_schema",
-                    "name": "cv_role_achievement_extraction",
-                    "description": "Compact CV extraction for staged DCT construction",
+                    "name": "cv_extraction_result",
+                    "description": "Transient CVExtractionResult used before deterministic DCT construction",
                     "schema": self._extraction_schema(block_ids),
                     "strict": True,
                 },
@@ -281,7 +283,13 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
         return {
             "type": "object",
             "additionalProperties": False,
-            "required": ["source_label", "person_name", "roles", "achievements"],
+            "required": [
+                "source_label",
+                "person_name",
+                "roles",
+                "achievements",
+                "interpretation",
+            ],
             "properties": {
                 "source_label": {"type": ["string", "null"]},
                 "person_name": {"type": ["string", "null"]},
@@ -332,6 +340,69 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
                             "role_index": {"type": ["integer", "null"], "minimum": 0},
                             "context": {"type": ["string", "null"]},
                             **source_ref_properties,
+                        },
+                    },
+                },
+                "interpretation": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "reflection_summary",
+                        "recurring_patterns",
+                        "capability_hypotheses",
+                        "unclear_questions",
+                    ],
+                    "properties": {
+                        "reflection_summary": {"type": "string"},
+                        "recurring_patterns": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["text", "supporting_achievement_indexes"],
+                                "properties": {
+                                    "text": {"type": "string"},
+                                    "supporting_achievement_indexes": {
+                                        "type": "array",
+                                        "items": {"type": "integer", "minimum": 0},
+                                    },
+                                },
+                            },
+                        },
+                        "capability_hypotheses": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": [
+                                    "value",
+                                    "confidence",
+                                    "rationale",
+                                    "supporting_achievement_indexes",
+                                    "alternatives",
+                                ],
+                                "properties": {
+                                    "value": {"type": "string"},
+                                    "confidence": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1,
+                                    },
+                                    "rationale": {"type": "string"},
+                                    "supporting_achievement_indexes": {
+                                        "type": "array",
+                                        "items": {"type": "integer", "minimum": 0},
+                                    },
+                                    "alternatives": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                    },
+                                },
+                            },
+                        },
+                        "unclear_questions": {
+                            "type": "array",
+                            "items": {"type": "string"},
                         },
                     },
                 },
