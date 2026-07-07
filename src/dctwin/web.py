@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import tempfile
 from datetime import datetime
 from http import HTTPStatus
@@ -56,6 +57,10 @@ def _session_path() -> Path:
     return _project_root() / SESSION_DIR / SESSION_FILE
 
 
+def _local_state_path() -> Path:
+    return _project_root() / SESSION_DIR
+
+
 def _load_session() -> dict[str, Any]:
     path = _session_path()
     if not path.is_file():
@@ -70,7 +75,7 @@ def _save_session(session: dict[str, Any]) -> None:
 
 
 def _reset_session() -> None:
-    _session_path().unlink(missing_ok=True)
+    shutil.rmtree(_local_state_path(), ignore_errors=True)
 
 
 def _manual_cv_label() -> str:
@@ -180,7 +185,10 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             self._handle_manual_evidence()
         elif self.path == "/api/reset":
             _reset_session()
-            self._send_json(HTTPStatus.OK, {"status": "reset"})
+            self._send_json(
+                HTTPStatus.OK,
+                {"status": "reset", "cleared": ["session", "source_cache"]},
+            )
         else:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
             return

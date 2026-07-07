@@ -130,7 +130,7 @@
             <h2>Add source material</h2>
             <div class="subtle">CV file · pasted CV · added achievement</div>
           </div>
-          <button class="button secondary" id="reset-button">Reset session</button>
+          <button class="button secondary" id="reset-button">Reset session &amp; cache</button>
         </div>
         <nav class="input-tabs" aria-label="Input methods">
           <button class="input-tab active" data-input-tab="upload">Upload a file</button>
@@ -312,9 +312,9 @@
       populateRoles();
       document.querySelector('#summary').style.display = 'none';
       document.querySelector('#result-subtitle').textContent = 'Waiting for a source';
-      viewer.innerHTML = '<div class="empty"><div class="empty-inner"><strong>Session reset</strong>Add a CV or pasted CV text to create a fresh Twin.</div></div>';
+      viewer.innerHTML = '<div class="empty"><div class="empty-inner"><strong>Session and cache reset</strong>Add a CV or pasted CV text to create a fresh Twin and force a new model run.</div></div>';
       ['#stage-source', '#stage-adapter', '#stage-reconcile'].forEach(id => document.querySelector(id).classList.remove('active'));
-      notify('Session Twin reset');
+      notify('Session and cache reset');
     }
 
     async function acceptResponse(response, label) {
