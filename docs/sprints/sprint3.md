@@ -1,6 +1,6 @@
 Sprint Goal
 
-The system can ingest additional user-provided evidence, whether from a second CV or free-form entry, and update the existing Twin without duplicating evidence already represented. This will verify whether the Twin is genuinely persistent rather than a one-shot CV transform.
+The system can ingest additional user-provided evidence, whether from a second CV or free-form entry, and update the existing Twin without duplicating evidence already represented, demonstrating that the Twin is a persistent canonical model rather than a one-shot CV transformation.
 
 Details
 There are two workstreams.
@@ -36,31 +36,21 @@ Twin Mapper
 
 The Reconciliation Agent’s job is:
 
-“Given newly extracted roles/evidence and the existing Twin, decide what is new, what is duplicate, what is a refinement, and what requires user confirmation.”
+“Given newly extracted roles/evidence and the existing Twin, decide what is new, what is duplicate, what is a refinement, and what requires user confirmation, and determine whether existing inferences require regeneration.”
 
 For Sprint 3, three statuses are enough:
 
-new
+Match classification
 
-duplicate
-
-possible_duplicate
-
-Reconciliation outcomes:
 NEW
-Add new evidence item.
-
 DUPLICATE
-Attach source reference to existing evidence.
+POSSIBLE_DUPLICATE
 
-REFINEMENT
-Update canonical wording and retain both source references.
+Reconciliation action
 
-CONFLICT
-Do not auto-merge; flag for user review.
-
-LOW_CONFIDENCE_MATCH
-Suggest possible merge; require confirmation.
+ADD
+MERGE_PROVENANCE
+REQUEST_USER_CONFIRMATION
 
 Additional CV requirement
 Manual source ingestion: pasted CV / career text
@@ -85,17 +75,28 @@ model_call_completed
 json_validation_completed
 mirror_rendered
 
+Instrumentation
+
+roles_detected
+evidence_extracted
+evidence_matched
+evidence_added
+evidence_merged
+possible_duplicates
+
 Log elapsed time for each step. You need to know whether the latency is coming from PDF extraction, Azure round-trip/model latency, JSON validation, rendering, or local app overhead.
 
 Sprint 3 acceptance criteria:
 
 User can upload a second CV.
 
-System matches existing roles rather than creating duplicates.
+The Twin remains canonical after repeated ingestion.
+
+Existing inferences and the Career Mirror are regenerated following successful reconciliation.
 
 System identifies exact and near-duplicate evidence.
 
-Duplicate evidence gains additional source provenance rather than becoming a new evidence item.
+The existing evidence item gains an additional supporting source.
 
 New evidence is added to the correct role.
 
@@ -109,4 +110,13 @@ Total ingestion duration is visible in dev mode.
 
 Text-based two-page CV completes under 10 seconds in deployed Azure environment, or bottleneck is identified.
 
+Repeated ingestion of the same source is idempotent.
+
 Duplicate-detection/reconciliation does not add more than 3 seconds for a second CV of similar size.
+
+Out of Scope
+Persistent user accounts (Sprint 4)
+Mirror UX redesign and editing experience (Sprint 5)
+LinkedIn ingestion
+Advanced conflict resolution beyond REQUEST_USER_CONFIRMATION
+Performance optimization beyond instrumentation and bottleneck identification
