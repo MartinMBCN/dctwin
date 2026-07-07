@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dctwin.dev/schemas/tag-catalog/0.1.0",
+  "title": "Digital Career Twin Tag Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "tags"],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "name", "description", "aliases"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^tag_[a-z0-9_-]+$" },
+          "type": { "type": "string", "enum": ["capability", "narrative_theme"] },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "aliases": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+        }
+      }
+    }
+  }
+}

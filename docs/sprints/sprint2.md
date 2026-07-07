@@ -52,3 +52,23 @@ Schema validation, dangling-reference checks, evidence coverage, provenance, inf
 
 Authenticate with Azure
 Confirm access to the empty Foundry project and capture its non-secret endpoint.
+
+Implementation status — 2026-07-07
+
+Completed locally:
+
+- Formal DCT, normalized-source and tag-catalog contracts.
+- Controlled seed catalog with capability and narrative-theme tags.
+- PDF and DOCX CV format strategies under a source-agnostic registry.
+- Direct-identifier separation before model invocation, with email retained as a private unverified enrollment candidate.
+- Source Adapter Agent orchestration boundary with deterministic and Foundry-backed providers.
+- Schema, provenance, catalog and referential-integrity acceptance checks.
+- Synthetic fixtures and automated tests.
+- Local upload UI for PDF and DOCX sources.
+- Azure Foundry project discovery, model deployment and one validated real-CV run.
+
+Pending:
+
+- Browser-test the local UI end to end.
+- Review the baseline Career Mirror for the private CV fixture.
+- Add progress/timing instrumentation so long model calls are visible to the user.

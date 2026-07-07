@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dctwin.dev/schemas/enrollment-candidates/0.1.0",
+  "title": "Enrollment Candidates",
+  "description": "Private, non-model account enrollment candidates extracted from a source.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_id", "candidates"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "source_id": { "type": "string", "pattern": "^src_[a-zA-Z0-9_-]+$" },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "value", "source_block_id", "purpose", "verification_status"],
+        "properties": {
+          "type": { "const": "email" },
+          "value": { "type": "string", "format": "email" },
+          "source_block_id": { "type": "string", "pattern": "^block_[a-zA-Z0-9_-]+$" },
+          "purpose": { "const": "account_enrollment" },
+          "verification_status": { "const": "unverified" }
+        }
+      }
+    }
+  }
+}

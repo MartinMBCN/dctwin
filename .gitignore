@@ -1,0 +1,17 @@
+.env
+.venv/
+.azure/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# Personal source material and locally generated Twins never enter Git.
+private/
+*.private.json
+
+# Build and coverage output.
+build/
+dist/
+*.egg-info/
+htmlcov/
+.coverage

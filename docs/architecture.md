@@ -63,7 +63,7 @@ Digital Career Twin Store
 Agentic Architecture
 Source Adapter
 ──────────────
-"I know how to read CVs."
+"I know how to normalize supported source material."
 
         ↓
 
@@ -154,3 +154,49 @@ Role
     ├── Metric
     ├── Behaviour
     └── Outcome
+
+Implemented Sprint 2 slice
+
+Raw source file
+      │
+      ▼
+Source Adapter registry
+      ├── cv / PDF strategy
+      └── cv / DOCX strategy
+      │
+      ▼
+Normalized Source Document
+      │ stable blocks, locators, content hash, privacy metadata
+      ▼
+Source Adapter Agent
+      │ source-specific instructions + DCT schema + tag catalog
+      ▼
+Candidate Digital Career Twin
+      │
+      ▼
+Acceptance Gate
+      ├── JSON Schema
+      ├── source and block references
+      ├── role and evidence references
+      ├── controlled tag references
+      └── inference support
+      │
+      ▼
+Accepted Twin + JSON Career Mirror
+
+In parallel, source normalization may emit a private enrollment candidate:
+
+Extracted email
+      │ excluded from normalized model document
+      ▼
+Unverified Enrollment Candidate
+      │ possession verification + user confirmation
+      ▼
+Account Identity Store
+      │ opaque owner ID
+      ▼
+Digital Career Twin ownership link
+
+The Account Identity Store owns authentication and contact identifiers. The Twin owns professional facts, evidence and inferences. Neither duplicates the other's data.
+
+The model provider is an orchestration seam. A deterministic static provider supports local development and evaluation; the Foundry provider implements the same interface. Model output never writes directly to the canonical repository.

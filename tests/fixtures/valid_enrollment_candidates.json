@@ -1,0 +1,13 @@
+{
+  "schema_version": "0.1.0",
+  "source_id": "src_synthetic_cv",
+  "candidates": [
+    {
+      "type": "email",
+      "value": "alex@example.com",
+      "source_block_id": "block_page_1",
+      "purpose": "account_enrollment",
+      "verification_status": "unverified"
+    }
+  ]
+}

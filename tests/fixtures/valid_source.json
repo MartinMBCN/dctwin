@@ -1,0 +1,37 @@
+{
+  "schema_version": "0.1.0",
+  "source_id": "src_synthetic_cv",
+  "source_type": "cv",
+  "media_type": "application/pdf",
+  "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "ingested_at": "2026-07-06T10:00:00Z",
+  "adapter": {
+    "name": "synthetic_cv",
+    "version": "0.1.0"
+  },
+  "privacy": {
+    "classification": "personal_data",
+    "direct_identifiers_minimized": true,
+    "enrollment_candidates_separated": true
+  },
+  "blocks": [
+    {
+      "id": "block_page_1",
+      "locator": {
+        "kind": "page",
+        "value": "1"
+      },
+      "text": "ALEX EXAMPLE | [EMAIL_1] | [PHONE_1]\nACME — Platform Lead, 2022–2025\nReduced deployment time by 60% through a reusable delivery platform.",
+      "redactions": [
+        {
+          "category": "email",
+          "placeholder": "[EMAIL_1]"
+        },
+        {
+          "category": "phone",
+          "placeholder": "[PHONE_1]"
+        }
+      ]
+    }
+  ]
+}

@@ -1,62 +1,255 @@
 {
-  "person": {
-    "name": "",
-    "location": "",
-    "work_authorization": []
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dctwin.dev/schemas/digital-career-twin/0.2.0",
+  "title": "Digital Career Twin",
+  "description": "Canonical, evidence-based representation of a person's professional identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "twin_id",
+    "generated_at",
+    "tag_catalog_version",
+    "person",
+    "sources",
+    "roles",
+    "evidence_items",
+    "inferences",
+    "gaps",
+    "reflection"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "0.2.0" },
+    "twin_id": { "$ref": "#/$defs/twinId" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "tag_catalog_version": { "type": "string", "minLength": 1 },
+    "person": { "$ref": "#/$defs/person" },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" },
+      "minItems": 1
+    },
+    "roles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/role" }
+    },
+    "evidence_items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "inferences": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/inference" }
+    },
+    "gaps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/gap" }
+    },
+    "reflection": { "$ref": "#/$defs/reflection" }
   },
-
-  "roles": [
-    {
-      "id": "",
-      "title": "",
-      "organization": "",
-      "start_date": "",
-      "end_date": "",
-      "summary": "",
-      "evidence_ids": []
-    }
-  ],
-
-  "evidence_items": [
-    {
-      "id": "",
-      "type": "",
-      "text": "",
-      "source": ""
-    }
-  ],
-
-  "inferences": {
-    "career_stage": {
-      "value": "",
-      "confidence": 0.0,
-      "rationale": "",
-      "supporting_evidence_ids": []
+  "$defs": {
+    "twinId": { "type": "string", "pattern": "^twin_[a-zA-Z0-9_-]+$" },
+    "sourceId": { "type": "string", "pattern": "^src_[a-zA-Z0-9_-]+$" },
+    "roleId": { "type": "string", "pattern": "^role_[a-zA-Z0-9_-]+$" },
+    "evidenceId": { "type": "string", "pattern": "^ev_[a-zA-Z0-9_-]+$" },
+    "factId": { "type": "string", "pattern": "^fact_[a-zA-Z0-9_-]+$" },
+    "inferenceId": { "type": "string", "pattern": "^inf_[a-zA-Z0-9_-]+$" },
+    "gapId": { "type": "string", "pattern": "^gap_[a-zA-Z0-9_-]+$" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "dateValue": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{4}(-[0-9]{2})?(-[0-9]{2})?$"
     },
-
-    "professional_identity": {
-      "value": "",
-      "confidence": 0.0,
-      "rationale": "",
-      "supporting_evidence_ids": []
-    },
-
-    "core_capabilities": [
-      {
-        "value": "",
-        "confidence": 0.0,
-        "rationale": "",
-        "supporting_evidence_ids": []
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "block_id", "quote"],
+      "properties": {
+        "source_id": { "$ref": "#/$defs/sourceId" },
+        "block_id": { "type": "string", "minLength": 1 },
+        "quote": { "type": ["string", "null"], "minLength": 1 }
       }
-    ],
-
-    "low_confidence_fields": []
-  },
-
-  "reflection": {
-    "summary": "",
-    "what_the_cv_strongly_supports": [],
-    "what_is_unclear": [],
-    "suggested_questions": []
+    },
+    "factValue": {
+      "anyOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "value", "extraction_confidence", "source_refs"],
+      "properties": {
+        "id": { "$ref": "#/$defs/factId" },
+        "kind": {
+          "type": "string",
+          "enum": ["name", "location", "work_authorization", "education", "certification", "language", "other"]
+        },
+        "value": { "$ref": "#/$defs/factValue" },
+        "extraction_confidence": { "$ref": "#/$defs/confidence" },
+        "source_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceRef" },
+          "minItems": 1
+        }
+      }
+    },
+    "preference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "source_refs"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "value": { "$ref": "#/$defs/factValue" },
+        "source_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceRef" },
+          "minItems": 1
+        }
+      }
+    },
+    "person": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["facts", "preferences"],
+      "properties": {
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/fact" } },
+        "preferences": { "type": "array", "items": { "$ref": "#/$defs/preference" } }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "label", "adapter", "content_hash"],
+      "properties": {
+        "id": { "$ref": "#/$defs/sourceId" },
+        "type": {
+          "type": "string",
+          "enum": ["cv", "linkedin_profile", "portfolio", "interview_transcript", "story", "user_correction", "other"]
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "adapter": { "type": "string", "minLength": 1 },
+        "content_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "organization", "start_date", "end_date", "summary", "extraction_confidence", "source_refs"],
+      "properties": {
+        "id": { "$ref": "#/$defs/roleId" },
+        "title": { "type": "string", "minLength": 1 },
+        "organization": { "type": "string", "minLength": 1 },
+        "start_date": { "$ref": "#/$defs/dateValue" },
+        "end_date": { "$ref": "#/$defs/dateValue" },
+        "summary": { "type": "string" },
+        "extraction_confidence": { "$ref": "#/$defs/confidence" },
+        "source_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceRef" },
+          "minItems": 1
+        }
+      }
+    },
+    "tagAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag_id", "confidence", "rationale"],
+      "properties": {
+        "tag_id": { "type": "string", "pattern": "^tag_[a-z0-9_-]+$" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "rationale": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "text", "role_id", "context", "source_refs", "tag_assignments"],
+      "properties": {
+        "id": { "$ref": "#/$defs/evidenceId" },
+        "type": {
+          "type": "string",
+          "enum": ["achievement", "responsibility", "decision", "technology", "metric", "behaviour", "outcome", "project"]
+        },
+        "text": { "type": "string", "minLength": 1 },
+        "role_id": {
+          "anyOf": [
+            { "$ref": "#/$defs/roleId" },
+            { "type": "null" }
+          ]
+        },
+        "context": { "type": ["string", "null"] },
+        "source_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourceRef" },
+          "minItems": 1
+        },
+        "tag_assignments": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["capabilities", "narrative_themes"],
+          "properties": {
+            "capabilities": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/tagAssignment" },
+              "minItems": 1
+            },
+            "narrative_themes": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/tagAssignment" },
+              "minItems": 1
+            }
+          }
+        }
+      }
+    },
+    "inference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "value", "confidence", "rationale", "supporting_evidence_ids", "alternatives", "status"],
+      "properties": {
+        "id": { "$ref": "#/$defs/inferenceId" },
+        "kind": {
+          "type": "string",
+          "enum": ["career_stage", "professional_identity", "capability", "narrative_theme", "other"]
+        },
+        "value": { "type": "string", "minLength": 1 },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "rationale": { "type": "string", "minLength": 1 },
+        "supporting_evidence_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceId" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "alternatives": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["proposed", "accepted", "contested", "rejected"] }
+      }
+    },
+    "gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "field_path", "reason", "resolution_question"],
+      "properties": {
+        "id": { "$ref": "#/$defs/gapId" },
+        "field_path": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "resolution_question": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reflection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "strongly_supported", "unclear", "suggested_questions"],
+      "properties": {
+        "summary": { "type": "string" },
+        "strongly_supported": { "type": "array", "items": { "type": "string" } },
+        "unclear": { "type": "array", "items": { "type": "string" } },
+        "suggested_questions": { "type": "array", "items": { "type": "string" } }
+      }
+    }
   }
 }

@@ -1,0 +1,124 @@
+{
+  "version": "0.1.0",
+  "tags": [
+    {
+      "id": "tag_operating_model_design",
+      "type": "capability",
+      "name": "Operating model design",
+      "description": "Designing responsibilities, governance, decision rights and working mechanisms that allow an organization to operate effectively.",
+      "aliases": ["organizational design", "target operating model", "TOM"]
+    },
+    {
+      "id": "tag_organizational_change",
+      "type": "capability",
+      "name": "Organizational change",
+      "description": "Changing structures, behaviours and adoption patterns across groups of people.",
+      "aliases": ["change management", "transformation"]
+    },
+    {
+      "id": "tag_technology_strategy",
+      "type": "capability",
+      "name": "Technology strategy",
+      "description": "Connecting technology choices and investment decisions to organizational outcomes.",
+      "aliases": ["technical strategy", "IT strategy"]
+    },
+    {
+      "id": "tag_platform_engineering",
+      "type": "capability",
+      "name": "Platform engineering",
+      "description": "Building and operating reusable technical capabilities that improve the experience and performance of delivery teams.",
+      "aliases": ["internal developer platform", "engineering platform"]
+    },
+    {
+      "id": "tag_delivery_excellence",
+      "type": "capability",
+      "name": "Delivery excellence",
+      "description": "Improving the predictability, quality, speed and traceability of product or technology delivery.",
+      "aliases": ["delivery management", "software delivery performance"]
+    },
+    {
+      "id": "tag_ai_adoption",
+      "type": "capability",
+      "name": "AI adoption",
+      "description": "Enabling responsible and valuable adoption of artificial intelligence across workflows or organizations.",
+      "aliases": ["enterprise AI transformation", "AI enablement"]
+    },
+    {
+      "id": "tag_governance",
+      "type": "capability",
+      "name": "Governance",
+      "description": "Creating decision, oversight and accountability mechanisms across stakeholders.",
+      "aliases": ["decision governance", "controls"]
+    },
+    {
+      "id": "tag_stakeholder_alignment",
+      "type": "capability",
+      "name": "Stakeholder alignment",
+      "description": "Building shared understanding and coordinated action among groups with different incentives or responsibilities.",
+      "aliases": ["executive alignment", "cross-functional alignment"]
+    },
+    {
+      "id": "tag_cost_optimization",
+      "type": "capability",
+      "name": "Cost optimization",
+      "description": "Reducing or avoiding expenditure while preserving or improving outcomes.",
+      "aliases": ["cost reduction", "FinOps"]
+    },
+    {
+      "id": "tag_reliability_observability",
+      "type": "capability",
+      "name": "Reliability and observability",
+      "description": "Improving system reliability through measurement, visibility and operational feedback.",
+      "aliases": ["SRE", "operational excellence", "observability"]
+    },
+    {
+      "id": "tag_automation",
+      "type": "capability",
+      "name": "Automation",
+      "description": "Replacing repeatable manual activity with reliable, scalable automated workflows.",
+      "aliases": ["workflow automation", "process automation"]
+    },
+    {
+      "id": "tag_team_scaling",
+      "type": "capability",
+      "name": "Team scaling",
+      "description": "Growing teams and coordination structures while maintaining effective ownership and delivery.",
+      "aliases": ["organizational scaling", "engineering leadership"]
+    },
+    {
+      "id": "tag_scaling_through_systems",
+      "type": "narrative_theme",
+      "name": "Scaling through systems",
+      "description": "A recurring pattern of creating systems and operating mechanisms that enable growth without proportional overhead.",
+      "aliases": ["systemic scaling", "scale without overhead"]
+    },
+    {
+      "id": "tag_simplifying_complexity",
+      "type": "narrative_theme",
+      "name": "Simplifying complexity",
+      "description": "A recurring pattern of replacing fragmented or bespoke approaches with understandable reusable mechanisms.",
+      "aliases": ["standardization", "complexity reduction"]
+    },
+    {
+      "id": "tag_restoring_momentum",
+      "type": "narrative_theme",
+      "name": "Restoring momentum",
+      "description": "A recurring pattern of restarting, realigning or accelerating initiatives that had stalled or lacked traction.",
+      "aliases": ["turnaround", "unblocking delivery"]
+    },
+    {
+      "id": "tag_measurable_business_value",
+      "type": "narrative_theme",
+      "name": "Measurable business value",
+      "description": "A recurring pattern of connecting technical or organizational work to quantified business outcomes.",
+      "aliases": ["outcome orientation", "value realization"]
+    },
+    {
+      "id": "tag_capability_building",
+      "type": "narrative_theme",
+      "name": "Capability building",
+      "description": "A recurring pattern of leaving behind reusable organizational ability rather than a one-off result.",
+      "aliases": ["sustainable capability", "institutionalizing practice"]
+    }
+  ]
+}

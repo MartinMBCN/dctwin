@@ -1,0 +1,109 @@
+{
+  "schema_version": "0.2.0",
+  "twin_id": "twin_synthetic",
+  "generated_at": "2026-07-06T10:05:00Z",
+  "tag_catalog_version": "0.1.0",
+  "person": {
+    "facts": [
+      {
+        "id": "fact_name",
+        "kind": "name",
+        "value": "Alex Example",
+        "extraction_confidence": 0.99,
+        "source_refs": [
+          {
+            "source_id": "src_synthetic_cv",
+            "block_id": "block_page_1",
+            "quote": "ALEX EXAMPLE"
+          }
+        ]
+      }
+    ],
+    "preferences": []
+  },
+  "sources": [
+    {
+      "id": "src_synthetic_cv",
+      "type": "cv",
+      "label": "Synthetic CV",
+      "adapter": "synthetic_cv@0.1.0",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "roles": [
+    {
+      "id": "role_acme_platform_lead",
+      "title": "Platform Lead",
+      "organization": "ACME",
+      "start_date": "2022",
+      "end_date": "2025",
+      "summary": "Led development of a reusable delivery platform.",
+      "extraction_confidence": 0.98,
+      "source_refs": [
+          {
+            "source_id": "src_synthetic_cv",
+            "block_id": "block_page_1",
+            "quote": null
+        }
+      ]
+    }
+  ],
+  "evidence_items": [
+    {
+      "id": "ev_deployment_time",
+      "type": "achievement",
+      "text": "Reduced deployment time by 60% through a reusable delivery platform.",
+      "role_id": "role_acme_platform_lead",
+      "context": null,
+      "source_refs": [
+        {
+          "source_id": "src_synthetic_cv",
+          "block_id": "block_page_1",
+          "quote": "Reduced deployment time by 60% through a reusable delivery platform."
+        }
+      ],
+      "tag_assignments": {
+        "capabilities": [
+          {
+            "tag_id": "tag_platform_engineering",
+            "confidence": 0.95,
+            "rationale": "The evidence explicitly describes a reusable delivery platform."
+          }
+        ],
+        "narrative_themes": [
+          {
+            "tag_id": "tag_measurable_business_value",
+            "confidence": 0.9,
+            "rationale": "The outcome is expressed as a quantified improvement."
+          }
+        ]
+      }
+    }
+  ],
+  "inferences": [
+    {
+      "id": "inf_identity_platform_leader",
+      "kind": "professional_identity",
+      "value": "Platform-oriented technology leader",
+      "confidence": 0.7,
+      "rationale": "The available evidence combines platform ownership with a quantified delivery result.",
+      "supporting_evidence_ids": ["ev_deployment_time"],
+      "alternatives": ["Delivery leader with a single platform achievement"],
+      "status": "proposed"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "gap_team_scope",
+      "field_path": "roles[0].team_scope",
+      "reason": "The CV does not state team size or reporting scope.",
+      "resolution_question": "What team and organizational scope did the Platform Lead role include?"
+    }
+  ],
+  "reflection": {
+    "summary": "The source supports platform leadership linked to a measurable delivery improvement.",
+    "strongly_supported": ["A reusable platform reduced deployment time by 60%."],
+    "unclear": ["The scale of leadership responsibility is not stated."],
+    "suggested_questions": ["What team and organizational scope did the Platform Lead role include?"]
+  }
+}
