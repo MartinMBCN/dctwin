@@ -52,6 +52,8 @@
     .button { border: 0; border-radius: 10px; padding: 10px 15px; background: var(--green); color: white; font-weight: 720; cursor: pointer; }
     .button:hover { background: #374151; }
     .button.secondary { background: transparent; color: var(--green); border: 1px solid #c3cad5; }
+    .button.danger { background: #6b2d2d; }
+    .button.danger:hover { background: #542323; }
     .button:disabled { opacity: .5; cursor: not-allowed; }
     textarea, select, input[type="text"] { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfe; color: var(--ink); padding: 12px; }
     textarea { min-height: 190px; resize: vertical; }
@@ -87,6 +89,18 @@
     .candidate code { color: var(--green); font-size: 15px; }
     .status-card { padding: 18px; border: 1px solid #d3d8e1; background: var(--amber-soft); border-radius: 14px; margin-bottom: 12px; }
     .status-card strong { display: block; color: #596273; margin-bottom: 5px; }
+    .save-callout { border: 1px solid #c7ced9; background: linear-gradient(135deg, #f8fafc, #e9edf3); border-radius: 16px; padding: 16px; margin: 0 0 24px; display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+    .save-callout strong { display: block; margin-bottom: 4px; }
+    .account-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(31,41,51,.38); display: none; place-items: center; padding: 24px; z-index: 20; }
+    .modal-backdrop.show { display: grid; }
+    .modal { width: min(560px, 100%); max-height: min(760px, calc(100vh - 48px)); overflow: auto; background: white; border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 24px 80px rgba(31,41,51,.22); }
+    .modal-head { display: flex; justify-content: space-between; gap: 18px; align-items: start; padding: 22px 24px 16px; border-bottom: 1px solid var(--line); }
+    .modal-head h2 { margin: 0; font-size: 21px; }
+    .modal-body { padding: 22px 24px 24px; }
+    .close-button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 24px; line-height: 1; }
+    .auth-code { font: 28px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .16em; background: #f3f5f8; border: 1px solid var(--line); border-radius: 14px; padding: 13px 16px; display: inline-block; margin: 8px 0 14px; }
+    .auth-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .stage-list { display: grid; gap: 10px; text-align: left; margin-top: 18px; }
     .stage-row { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; padding: 11px 12px; border-radius: 12px; background: #f3f5f8; color: var(--muted); }
     .stage-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; background: #a9b2bf; box-shadow: 0 0 0 4px rgba(105,115,134,.1); }
@@ -98,7 +112,7 @@
     pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; color: #33413b; }
     .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: #1f2933; color: white; border-radius: 10px; padding: 11px 15px; transition: .2s ease; box-shadow: var(--shadow); }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
-    @media (max-width: 820px) { .workspace { grid-template-columns: 1fr; } header { display: block; } .local-badge { display: inline-flex; margin-top: 14px; } }
+    @media (max-width: 820px) { .workspace { grid-template-columns: 1fr; } header { display: block; } .local-badge { display: inline-flex; margin-top: 14px; } .auth-row, .save-callout { display: block; } .save-callout .button { margin-top: 12px; } }
   </style>
 </head>
 <body>
@@ -108,7 +122,7 @@
         <h1>Digital Career Twin</h1>
         <div class="intro">Reflect on your professional life</div>
       </div>
-      <div class="local-badge"><span class="pulse"></span> Local session Twin <span id="app-version"></span></div>
+      <div class="local-badge"><span class="pulse"></span> <span id="auth-summary">Local session Twin</span> <span id="app-version"></span> <button class="button secondary" id="account-button" style="padding:5px 9px">Account</button></div>
     </header>
 
     <section class="workspace">
@@ -182,9 +196,25 @@
       </article>
     </section>
   </main>
+  <div class="modal-backdrop" id="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow">Account</div>
+          <h2 id="account-title">Save your Digital Career Twin</h2>
+          <div class="subtle" id="account-subtitle">Create an account with a verified email address.</div>
+        </div>
+        <button class="close-button" id="account-close" aria-label="Close account dialog">×</button>
+      </div>
+      <div class="modal-body" id="account-body"></div>
+    </div>
+  </div>
   <div class="toast" id="toast" role="status"></div>
 
   <script>
+    const AUTH_SESSION_KEY = 'dctwin.authSessionId';
+    const DELETE_CONFIRMATION = 'Are you sure? Your digital twin will be deleted and cannot be recovered. You will have to rebuild the Twin if you come back later.';
+    const LEAVE_CONFIRMATION = 'Are you sure you want to leave without creating an account? Your digital twin will be deleted and cannot be recovered. You will have to rebuild the Twin if you come back later.';
     const firstCvBusyStages = [
       { at: 0, title: 'Uploading your CV' },
       { at: 1200, title: 'Extracting roles and achievements' },
@@ -206,11 +236,13 @@
       { at: 16000, title: 'Re-constructing your digital twin' },
       { at: 26000, title: 'Rendering your digital twin for presentation' }
     ];
-    const state = { tab: 'mirror', result: null, roles: [], busyTimer: null, busyStarted: 0, busyStages: firstCvBusyStages };
+    const state = { tab: 'mirror', result: null, roles: [], busyTimer: null, busyStarted: 0, busyStages: firstCvBusyStages, auth: { authenticated: false }, authCandidates: [], pendingCode: null, mergeDecision: null };
     const input = document.querySelector('#file-input');
     const dropZone = document.querySelector('#drop-zone');
     const viewer = document.querySelector('#viewer');
     const toast = document.querySelector('#toast');
+    const accountModal = document.querySelector('#account-modal');
+    const accountBody = document.querySelector('#account-body');
 
     document.querySelectorAll('.input-tab').forEach(button => button.addEventListener('click', () => {
       document.querySelectorAll('.input-tab').forEach(tab => tab.classList.toggle('active', tab === button));
@@ -225,6 +257,15 @@
     document.querySelector('#submit-text').addEventListener('click', adaptText);
     document.querySelector('#submit-evidence').addEventListener('click', addEvidence);
     document.querySelector('#reset-button').addEventListener('click', resetSession);
+    document.querySelector('#account-button').addEventListener('click', openAccountModal);
+    document.querySelector('#account-close').addEventListener('click', closeAccountModal);
+    accountModal.addEventListener('click', event => { if (event.target === accountModal) closeAccountModal(); });
+    window.addEventListener('beforeunload', event => {
+      if (!shouldWarnBeforeLeaving()) return;
+      event.preventDefault();
+      event.returnValue = LEAVE_CONFIRMATION;
+      return LEAVE_CONFIRMATION;
+    });
 
     document.querySelectorAll('.tab').forEach(button => button.addEventListener('click', () => {
       state.tab = button.dataset.tab;
@@ -235,10 +276,10 @@
     fetch('/api/health').then(response => response.json()).then(health => {
       document.querySelector('#app-version').textContent = health.app_version ? `v${health.app_version}` : '';
     });
-    loadState();
+    loadAuthSession().then(loadState);
 
     async function loadState() {
-      const response = await fetch('/api/state');
+      const response = await apiFetch('/api/state');
       const result = await response.json();
       state.roles = result.roles || [];
       populateRoles();
@@ -247,6 +288,7 @@
         document.querySelector('#result-subtitle').textContent = `${result.source_count} source(s) in local session`;
         render();
       }
+      updateAccountChrome();
     }
 
     async function adaptFile(file) {
@@ -254,7 +296,7 @@
       if (!['pdf', 'docx'].includes(extension)) return notify('Choose a PDF or DOCX file');
       setBusy(`Adapting ${file.name}…`, cvBusyStages());
       try {
-        const response = await fetch('/api/adapt', {
+        const response = await apiFetch('/api/adapt', {
           method: 'POST',
           headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name), 'X-DCTWIN-Local': '1' },
           body: file
@@ -270,7 +312,7 @@
       if (!text) return notify('Paste CV text first');
       setBusy('Adapting pasted CV text…', cvBusyStages());
       try {
-        const response = await fetch('/api/adapt-text', {
+        const response = await apiFetch('/api/adapt-text', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-DCTWIN-Local': '1' },
           body: JSON.stringify({ text })
@@ -288,7 +330,7 @@
       if (!text) return notify('Enter at least one achievement first');
       setBusy('Adding achievements to the session Twin…', achievementBusyStages);
       try {
-        const response = await fetch('/api/manual-evidence', {
+        const response = await apiFetch('/api/manual-evidence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-DCTWIN-Local': '1' },
           body: JSON.stringify({ role_id: roleId, text })
@@ -302,10 +344,12 @@
 
     async function resetSession() {
       stopBusySequence();
-      await fetch('/api/reset', { method: 'POST', headers: { 'X-DCTWIN-Local': '1' } });
+      await apiFetch('/api/reset', { method: 'POST', headers: { 'X-DCTWIN-Local': '1' } });
       state.result = null;
       state.roles = [];
+      state.mergeDecision = null;
       populateRoles();
+      updateAccountChrome();
       document.querySelector('#summary').style.display = 'none';
       document.querySelector('#result-subtitle').textContent = 'Waiting for a source';
       viewer.innerHTML = '<div class="empty"><div class="empty-inner"><strong>Session and cache reset</strong>Add a CV or pasted CV text to create a fresh Twin and force a new model run.</div></div>';
@@ -319,6 +363,7 @@
       state.result = result;
       state.roles = result.twin.roles || [];
       populateRoles();
+      updateAccountChrome();
       document.querySelector('#result-subtitle').textContent = `${label} · merged into session Twin`;
       document.querySelector('#summary').style.display = 'grid';
       document.querySelector('#metric-adapter').textContent = result.summary.adapter.replace('_', ' ');
@@ -413,14 +458,189 @@
         viewer.innerHTML = `<pre>${escapeHtml(JSON.stringify(state.result.twin, null, 2))}</pre>`;
       } else {
         const twin = state.result.twin;
+        const saveCallout = renderSaveCallout();
         const inferenceCards = (twin.inferences || []).map(item => `<div class="candidate"><div class="subtle">${escapeHtml(item.kind.replaceAll('_', ' '))} · ${Math.round(item.confidence * 100)}% confidence</div><strong>${escapeHtml(item.value)}</strong><div class="subtle" style="margin-top:7px">${escapeHtml(item.rationale)}</div></div>`).join('');
         const evidenceByRole = groupEvidenceByRole(twin.evidence_items || []);
         const showSourceQuotes = (twin.sources || []).length > 1;
         const roles = (twin.roles || []).map(role => renderRoleWithAchievements(role, evidenceByRole.get(role.id) || [], showSourceQuotes)).join('');
         const patterns = (twin.reflection.strongly_supported || []).map(item => `<div class="block"><div class="block-text">${escapeHtml(item)}</div></div>`).join('');
         const questions = (twin.reflection.suggested_questions || []).map(item => `<div class="status-card"><strong>Question</strong>${escapeHtml(item)}</div>`).join('');
-        viewer.innerHTML = `<section style="margin-bottom:24px"><div class="eyebrow">Reflection</div><h2 style="font-family:Georgia,serif;font-weight:500;font-size:27px;margin:7px 0 10px">${escapeHtml(twin.reflection.summary)}</h2></section><section><div class="eyebrow" style="margin-bottom:10px">Current hypotheses</div>${inferenceCards || '<p class="subtle">No cross-evidence inferences yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Recurring career themes</div>${patterns || '<p class="subtle">No recurring career themes yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Questions to resolve</div>${questions || '<p class="subtle">No open questions yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Career timeline</div>${roles}</section>`;
+        viewer.innerHTML = `${saveCallout}<section style="margin-bottom:24px"><div class="eyebrow">Reflection</div><h2 style="font-family:Georgia,serif;font-weight:500;font-size:27px;margin:7px 0 10px">${escapeHtml(twin.reflection.summary)}</h2></section><section><div class="eyebrow" style="margin-bottom:10px">Current hypotheses</div>${inferenceCards || '<p class="subtle">No cross-evidence inferences yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Recurring career themes</div>${patterns || '<p class="subtle">No recurring career themes yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Questions to resolve</div>${questions || '<p class="subtle">No open questions yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Career timeline</div>${roles}</section>`;
       }
+    }
+
+    function renderSaveCallout() {
+      if (!state.result || state.auth.authenticated) return '';
+      return `<aside class="save-callout"><div><strong>Create an account to save your Digital Career Twin for the future.</strong><div class="subtle">Your current Twin is stored only in this local session.</div></div><button class="button" onclick="openAccountModal()">Create account</button></aside>`;
+    }
+
+    async function loadAuthSession() {
+      const response = await apiFetch('/api/auth/session');
+      const auth = await response.json();
+      state.auth = auth;
+      if (!auth.authenticated) localStorage.removeItem(AUTH_SESSION_KEY);
+      updateAccountChrome();
+    }
+
+    async function openAccountModal() {
+      accountModal.classList.add('show');
+      state.pendingCode = null;
+      state.mergeDecision = null;
+      await refreshAuthCandidates();
+      renderAccountModal();
+    }
+
+    function closeAccountModal() {
+      accountModal.classList.remove('show');
+    }
+
+    async function refreshAuthCandidates() {
+      const response = await apiFetch('/api/auth/candidates');
+      const payload = await response.json();
+      state.authCandidates = payload.candidates || [];
+    }
+
+    function renderAccountModal() {
+      if (state.auth.authenticated) {
+        const expires = formatDateTime(state.auth.session?.expires_at);
+        accountBody.innerHTML = `<div class="status-card"><strong>Signed in as ${escapeHtml(state.auth.user.email)}</strong>Your session expires ${escapeHtml(expires)}.</div><div class="account-actions"><button class="button secondary" onclick="logout()">Log out</button><button class="button danger" onclick="confirmDeleteAccount()">Delete my digital twin</button></div>`;
+        return;
+      }
+      if (state.mergeDecision) {
+        accountBody.innerHTML = `<div class="status-card"><strong>Saved Twin found</strong>You already have a saved Digital Career Twin. What should happen to the Twin in this session?</div><div class="account-actions"><button class="button" onclick="resolveMerge('merge_session')">Merge this session Twin</button><button class="button secondary" onclick="resolveMerge('discard_session')">Discard this session Twin</button></div>`;
+        return;
+      }
+      const options = state.authCandidates.map(email => `<option value="${escapeAttr(email)}">${escapeHtml(email)}</option>`).join('');
+      const candidateSelect = state.authCandidates.length
+        ? `<div class="field"><label for="auth-email-select">Email detected in your sources</label><select id="auth-email-select"><option value="">Choose detected email…</option>${options}</select></div>`
+        : '';
+      const pending = state.pendingCode
+        ? `<div class="status-card"><strong>Local verification code</strong><div class="auth-code">${escapeHtml(state.pendingCode.simulated_code)}</div><div class="subtle">In production this would arrive by email. Locally, use this code to continue.</div></div><div class="field"><label for="auth-code">Enter code</label><input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></div><button class="button" onclick="verifyCode()">Verify and save Twin</button>`
+        : '';
+      accountBody.innerHTML = `${candidateSelect}<div class="field"><label for="auth-email">Email address</label><input id="auth-email" type="text" placeholder="you@example.com"></div><div class="auth-row"><div class="field"><label for="auth-duration">Log me out</label><select id="auth-duration"><option value="midnight">At midnight</option><option value="7_days" selected>In 7 days</option><option value="1_month">In 1 month</option></select></div><div class="field"><label for="auth-timezone">Timezone</label><input id="auth-timezone" type="text" value="${escapeAttr(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')}"></div></div><div class="account-actions"><button class="button" onclick="requestCode()">Send verification code</button><button class="button secondary" onclick="closeAccountModal()">Cancel</button></div>${pending}`;
+      const select = document.querySelector('#auth-email-select');
+      if (select) select.addEventListener('change', () => { if (select.value) document.querySelector('#auth-email').value = select.value; });
+    }
+
+    async function requestCode() {
+      const email = document.querySelector('#auth-email').value.trim();
+      if (!email) return notify('Enter an email address');
+      const response = await apiFetch('/api/auth/request-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const payload = await response.json();
+      if (!response.ok) return notify(payload.error || 'Could not request code');
+      state.pendingCode = payload;
+      renderAccountModal();
+    }
+
+    async function verifyCode() {
+      const code = document.querySelector('#auth-code').value.trim();
+      if (!code) return notify('Enter the verification code');
+      const response = await apiFetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: state.pendingCode.email,
+          code,
+          duration: document.querySelector('#auth-duration').value,
+          timezone: document.querySelector('#auth-timezone').value || 'UTC'
+        })
+      });
+      const payload = await response.json();
+      if (response.status === 409) {
+        state.mergeDecision = payload;
+        saveAuthSession(payload.session?.id);
+        renderAccountModal();
+        return;
+      }
+      if (!response.ok) return notify(payload.error || 'Could not verify code');
+      acceptAuthPayload(payload);
+      closeAccountModal();
+      notify('Digital Career Twin saved');
+    }
+
+    async function resolveMerge(strategy) {
+      const response = await apiFetch('/api/auth/resolve-merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merge_strategy: strategy })
+      });
+      const payload = await response.json();
+      if (!response.ok) return notify(payload.error || 'Could not resolve merge');
+      acceptAuthPayload(payload);
+      await loadState();
+      closeAccountModal();
+      notify(strategy === 'merge_session' ? 'Session Twin merged' : 'Saved Twin loaded');
+    }
+
+    async function logout() {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      state.auth = { authenticated: false };
+      updateAccountChrome();
+      closeAccountModal();
+      render();
+      notify('Logged out');
+    }
+
+    async function confirmDeleteAccount() {
+      if (!confirm(DELETE_CONFIRMATION)) return;
+      const response = await apiFetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: DELETE_CONFIRMATION })
+      });
+      const payload = await response.json();
+      if (!response.ok) return notify(payload.error || 'Could not delete account');
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      state.auth = { authenticated: false };
+      state.result = null;
+      state.roles = [];
+      populateRoles();
+      closeAccountModal();
+      viewer.innerHTML = '<div class="empty"><div class="empty-inner"><strong>Your digital twin was deleted</strong>Add a CV or pasted CV text to rebuild it if you come back later.</div></div>';
+      updateAccountChrome();
+      notify('Account deleted');
+    }
+
+    function acceptAuthPayload(payload) {
+      saveAuthSession(payload.session?.id);
+      state.auth = payload;
+      state.mergeDecision = null;
+      updateAccountChrome();
+      render();
+    }
+
+    function saveAuthSession(sessionId) {
+      if (sessionId) localStorage.setItem(AUTH_SESSION_KEY, sessionId);
+    }
+
+    function updateAccountChrome() {
+      const summary = document.querySelector('#auth-summary');
+      if (state.auth.authenticated) {
+        summary.textContent = `Saved Twin · ${state.auth.user.email}`;
+      } else {
+        summary.textContent = state.result ? 'Unsaved session Twin' : 'Local session Twin';
+      }
+    }
+
+    function shouldWarnBeforeLeaving() {
+      return Boolean(state.result && !state.auth.authenticated);
+    }
+
+    async function apiFetch(path, options = {}) {
+      const headers = new Headers(options.headers || {});
+      const sessionId = localStorage.getItem(AUTH_SESSION_KEY);
+      if (sessionId) headers.set('X-DCTWIN-Session', sessionId);
+      return fetch(path, { ...options, headers });
+    }
+
+    function formatDateTime(value) {
+      if (!value) return 'unknown';
+      return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     }
 
     function groupEvidenceByRole(items) {

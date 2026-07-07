@@ -117,6 +117,18 @@ Started locally:
   - logging out;
   - deleting the account after exact confirmation.
 - Added automated tests for the local auth route helper layer.
+- Added first account UI slice:
+  - save-account callout after the first Twin exists;
+  - account modal;
+  - email candidate selection;
+  - simulated local verification-code display;
+  - code verification;
+  - session duration selection;
+  - session expiry display;
+  - merge/discard prompt for existing Persistent Twin + local Session Twin;
+  - logout;
+  - account deletion confirmation;
+  - browser leave warning while an unsaved Session Twin exists.
 
 Agreed UX copy:
 
@@ -134,9 +146,6 @@ Post-first-CV callout:
 
 Still pending:
 
-- Add the account creation/login UI.
-- Offer all extracted email candidates during account creation.
-- Simulate local code delivery in the UI/dev log, with optional real email delivery only if a lightweight system mail path is available.
-- Retrieve Persistent Twin on login through the UI.
-- Ask before merging a Session Twin into an existing Persistent Twin through the UI.
-- Add manual logout, session expiry display and account deletion UI.
+- Exercise the account UI end-to-end locally with a real Session Twin.
+- Decide whether to add optional real email delivery through a lightweight system mail path.
+- Add any necessary UI polish after acceptance testing.
