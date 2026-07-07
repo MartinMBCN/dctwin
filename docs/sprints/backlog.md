@@ -42,3 +42,13 @@ Objective alignment may increase the importance of older but highly relevant evi
 Architectural implication
 
 Weighting belongs in the reasoning/projection layer, not the canonical Twin.
+
+**Backlog item: evidence quality assistance**
+
+Not automatic rewriting. 
+For example:
+Detect weak entries: vague, no outcome, no action, no context, no metric.
+Surface a gentle prompt: “This is saved, but could be strengthened. What changed as a result?”
+Offer optional improvement, not silent mutation.
+Keep original text as source quote.
+Store any improved wording as a derived/refined evidence text with provenance back to the original.
