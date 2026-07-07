@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from dctwin.adapters import AdapterRegistry, DocxCvAdapter, PdfCvAdapter, adapt_cv_text
 from dctwin.agent import SourceAdapterAgent
-from dctwin.foundry import FoundryTwinProvider
+from dctwin.foundry import FoundryExtractionTwinProvider, FoundryTwinProvider
 from dctwin.io import load_json, write_json
 from dctwin.reconciliation import ReconciliationAgent
 from dctwin.validation import validate_source_document, validate_twin
@@ -25,6 +25,7 @@ MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 MAX_TEXT_BYTES = 1 * 1024 * 1024
 SESSION_DIR = ".dctwin-local"
 SESSION_FILE = "session-state.json"
+CACHE_DIR = "cache"
 
 
 def _project_root() -> Path:
@@ -93,10 +94,33 @@ def _append_source_document(
     return [*source_documents, source_document]
 
 
+def _cache_path(source_document: dict[str, Any]) -> Path:
+    digest = source_document["content_hash"].removeprefix("sha256:")
+    return _project_root() / SESSION_DIR / CACHE_DIR / f"{digest}.candidate.json"
+
+
+def _load_cached_candidate(source_document: dict[str, Any]) -> dict[str, Any] | None:
+    path = _cache_path(source_document)
+    if path.is_file():
+        return load_json(path)
+    return None
+
+
+def _save_cached_candidate(source_document: dict[str, Any], candidate: dict[str, Any]) -> None:
+    path = _cache_path(source_document)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(candidate, path)
+
+
 def _provider() -> FoundryTwinProvider:
     from azure.identity import AzureDeveloperCliCredential
 
-    return FoundryTwinProvider.from_files(
+    provider_class = (
+        FoundryTwinProvider
+        if os.environ.get("DCTWIN_MODEL_PATH") == "full"
+        else FoundryExtractionTwinProvider
+    )
+    return provider_class.from_files(
         project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
         model_deployment=os.environ["DCTWIN_MODEL_DEPLOYMENT"],
         credential=AzureDeveloperCliCredential(process_timeout=30),
@@ -129,6 +153,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                     "mode": "local",
                     "formats": ["pdf", "docx", "pasted_text"],
                     "foundry": "ready" if _foundry_configured() else "not_configured",
+                    "model_path": os.environ.get("DCTWIN_MODEL_PATH", "staged_extraction"),
                 },
             )
         elif self.path == "/api/state":
@@ -320,30 +345,41 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             raise RuntimeError("The local agent is not connected to a Foundry model deployment")
 
         contracts = _contracts()
-        provider = _provider()
-        try:
-            _timing_mark(timings, "model_call_started", started)
-            agent = SourceAdapterAgent(
-                registry=_registry(),
-                provider=provider,
-                source_schema=contracts["source"],
-                enrollment_schema=contracts["enrollment"],
-                twin_schema=contracts["twin"],
-                tag_catalog=contracts["catalog"],
-            )
-            run = agent.run_adapted(adapted)
-            _timing_mark(timings, "model_call_completed", started)
-        finally:
-            provider.close()
+        cached_candidate = _load_cached_candidate(adapted.model_document)
+        if cached_candidate is not None:
+            _timing_mark(timings, "model_cache_hit", started)
+            source_document = adapted.model_document
+            enrollment_document = adapted.enrollment_document
+            candidate_twin = cached_candidate
+        else:
+            provider = _provider()
+            try:
+                _timing_mark(timings, "model_call_started", started)
+                agent = SourceAdapterAgent(
+                    registry=_registry(),
+                    provider=provider,
+                    source_schema=contracts["source"],
+                    enrollment_schema=contracts["enrollment"],
+                    twin_schema=contracts["twin"],
+                    tag_catalog=contracts["catalog"],
+                )
+                run = agent.run_adapted(adapted)
+                _timing_mark(timings, "model_call_completed", started)
+            finally:
+                provider.close()
+            source_document = run.source_document
+            enrollment_document = run.enrollment_document
+            candidate_twin = run.candidate_twin
+            _save_cached_candidate(source_document, candidate_twin)
 
         session = _load_session()
         reconciliation_agent = ReconciliationAgent()
         updated, reconciliation = reconciliation_agent.reconcile(
             existing_twin=session.get("twin"),
-            candidate_twin=run.candidate_twin,
+            candidate_twin=candidate_twin,
         )
         source_documents = _append_source_document(
-            session.get("source_documents", []), run.source_document
+            session.get("source_documents", []), source_document
         )
         _timing_mark(timings, "json_validation_started", started)
         validate_twin(
@@ -356,11 +392,11 @@ class LocalAppHandler(BaseHTTPRequestHandler):
         _timing_mark(timings, "mirror_rendered", started)
         session["twin"] = updated
         session["source_documents"] = source_documents
-        session.setdefault("enrollment_documents", []).append(run.enrollment_document)
+        session.setdefault("enrollment_documents", []).append(enrollment_document)
         _save_session(session)
         return self._response_payload(
-            source_document=run.source_document,
-            enrollment_document=run.enrollment_document,
+            source_document=source_document,
+            enrollment_document=enrollment_document,
             twin=updated,
             filename=filename,
             reconciliation=reconciliation.as_dict(),

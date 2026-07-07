@@ -34,6 +34,7 @@ PDF and DOCX are formats, not source types. Both strategies produce the same sou
 - `src/dctwin/adapters/` — source-format strategies and registry.
 - `src/dctwin/agent.py` — Source Adapter Agent orchestration boundary.
 - `src/dctwin/reconciliation.py` — deterministic Sprint 3 reconciliation boundary.
+- `src/dctwin/twin_builder.py` — deterministic mapping from compact extraction into the DCT contract.
 - `src/dctwin/validation.py` — schema and referential-integrity acceptance checks.
 - `prompts/` — source-agnostic agent and CV-specific instructions.
 - `tests/` — synthetic fixtures; personal CVs are never committed.
@@ -82,6 +83,8 @@ When the Foundry environment variables are set, the preview can create and updat
 
 The session Twin is stored in ignored local development state under `.dctwin-local/`. This is not account persistence.
 
+By default, the local Foundry path uses staged extraction: the model extracts compact roles and achievements, then deterministic code maps that into the full DCT schema. Set `DCTWIN_MODEL_PATH=full` to compare against the older one-shot full-DCT generation path. Source-derived candidates are cached by content hash under `.dctwin-local/cache/`.
+
 ## Privacy
 
 CVs and generated personal artifacts belong under the ignored `private/` directory or outside the repository. The PDF and DOCX strategies remove email addresses, international-format phone numbers and common street-address forms before model invocation.
@@ -90,4 +93,4 @@ Email addresses are emitted separately as unverified account-enrollment candidat
 
 ## Azure status
 
-The local contracts, adapter boundary, reconciliation boundary and deterministic tests are usable without Azure quota. The Foundry provider is available when a configured deployment is present. The provider boundary keeps model and deployment selection configurable.
+The local contracts, adapter boundary, reconciliation boundary, staged DCT builder and deterministic tests are usable without Azure quota. The Foundry provider is available when a configured deployment is present. The provider boundary keeps model and deployment selection configurable.

@@ -9,6 +9,8 @@ from typing import Any
 from azure.ai.projects import AIProjectClient
 from azure.core.credentials import TokenCredential
 
+from dctwin.twin_builder import build_twin_from_extraction
+
 
 class FoundryTwinProvider:
     """Generate a candidate Twin through a Foundry model deployment."""
@@ -200,3 +202,138 @@ class FoundryTwinProvider:
 
     def close(self) -> None:
         self._project.close()
+
+
+class FoundryExtractionTwinProvider(FoundryTwinProvider):
+    """Faster provider: model extracts roles/achievements; code builds the DCT."""
+
+    def generate(
+        self,
+        *,
+        source_document: dict[str, Any],
+        twin_schema: dict[str, Any],
+        tag_catalog: dict[str, Any],
+    ) -> dict[str, Any]:
+        del twin_schema
+        extraction = self._request_extraction(source_document=source_document)
+        return build_twin_from_extraction(
+            extraction=extraction,
+            source_document=source_document,
+            tag_catalog=tag_catalog,
+        )
+
+    def _request_extraction(self, *, source_document: dict[str, Any]) -> dict[str, Any]:
+        block_ids = [block["id"] for block in source_document["blocks"]]
+        request = {
+            "current_utc": datetime.now(UTC).isoformat(),
+            "task": (
+                "Extract only compact CV structure: person name if clearly stated, "
+                "roles, and achievement/responsibility claims. Do not infer "
+                "capabilities, themes, gaps, reflections, or full DCT structure."
+            ),
+            "normalized_source_document": source_document,
+        }
+        response = self._client.responses.create(
+            model=self._model_deployment,
+            instructions=(
+                "You are the fast extraction stage for a Digital Career Twin. "
+                "Return compact, source-grounded JSON only. Extract all clear roles "
+                "and material achievements/responsibilities, preserving source block "
+                "references and quotes. Do not produce the full DCT schema."
+            ),
+            input=json.dumps(request, ensure_ascii=False),
+            reasoning={"effort": "minimal"},
+            max_output_tokens=4_000,
+            store=False,
+            text={
+                "verbosity": "low",
+                "format": {
+                    "type": "json_schema",
+                    "name": "cv_role_achievement_extraction",
+                    "description": "Compact CV extraction for staged DCT construction",
+                    "schema": self._extraction_schema(block_ids),
+                    "strict": True,
+                },
+            },
+        )
+        if response.status != "completed":
+            raise RuntimeError(
+                "Foundry did not complete compact extraction: "
+                f"{response.incomplete_details or response.status}"
+            )
+        if not response.output_text:
+            raise RuntimeError("Foundry returned no compact extraction output")
+        result = json.loads(response.output_text)
+        if not isinstance(result, dict):
+            raise ValueError("Foundry compact extraction output was not a JSON object")
+        return result
+
+    @staticmethod
+    def _extraction_schema(block_ids: list[str]) -> dict[str, Any]:
+        block_id_schema: dict[str, Any] = {"type": "string"}
+        if block_ids:
+            block_id_schema["enum"] = block_ids
+        source_ref_properties = {
+            "source_block_id": block_id_schema,
+            "quote": {"type": ["string", "null"]},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        }
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["source_label", "person_name", "roles", "achievements"],
+            "properties": {
+                "source_label": {"type": ["string", "null"]},
+                "person_name": {"type": ["string", "null"]},
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "id",
+                            "title",
+                            "organization",
+                            "start_date",
+                            "end_date",
+                            "summary",
+                            "source_block_id",
+                            "quote",
+                            "confidence",
+                        ],
+                        "properties": {
+                            "id": {"type": "string"},
+                            "title": {"type": "string"},
+                            "organization": {"type": "string"},
+                            "start_date": {"type": ["string", "null"]},
+                            "end_date": {"type": ["string", "null"]},
+                            "summary": {"type": "string"},
+                            **source_ref_properties,
+                        },
+                    },
+                },
+                "achievements": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "text",
+                            "role_id",
+                            "role_index",
+                            "context",
+                            "source_block_id",
+                            "quote",
+                            "confidence",
+                        ],
+                        "properties": {
+                            "text": {"type": "string"},
+                            "role_id": {"type": ["string", "null"]},
+                            "role_index": {"type": ["integer", "null"], "minimum": 0},
+                            "context": {"type": ["string", "null"]},
+                            **source_ref_properties,
+                        },
+                    },
+                },
+            },
+        }

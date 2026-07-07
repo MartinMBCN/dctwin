@@ -9,6 +9,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 from dctwin.privacy import minimize_direct_identifiers
+from dctwin.twin_builder import classify_evidence, tag_assignments
 
 
 @dataclass(frozen=True)
@@ -181,7 +182,7 @@ class ReconciliationAgent:
                 evidence_text,
                 {item.get("id") for item in updated.get("evidence_items", [])},
             ),
-            "type": self._classify_evidence(evidence_text),
+            "type": classify_evidence(evidence_text),
             "text": evidence_text,
             "role_id": role_id,
             "context": "Manually entered by user.",
@@ -192,7 +193,7 @@ class ReconciliationAgent:
                     "quote": evidence_text,
                 }
             ],
-            "tag_assignments": self._tag_assignments(evidence_text, tag_catalog),
+            "tag_assignments": tag_assignments(evidence_text, tag_catalog),
         }
         match = self._best_evidence_match(updated, evidence)
         actions: list[dict[str, Any]]
@@ -501,64 +502,6 @@ class ReconciliationAgent:
                         {"category": item.category, "placeholder": item.placeholder}
                         for item in redactions
                     ],
-                }
-            ],
-        }
-
-    @staticmethod
-    def _classify_evidence(text: str) -> str:
-        normalized = _normalize(text)
-        if re.search(r"\d+%|€|\$|£|saved|reduced|increased|improved", normalized):
-            return "achievement"
-        if any(word in normalized for word in ("decided", "chose", "selected", "designed")):
-            return "decision"
-        if any(word in normalized for word in ("built", "automated", "implemented", "platform", "system")):
-            return "technology"
-        if any(word in normalized for word in ("led", "managed", "owned", "responsible")):
-            return "responsibility"
-        return "project"
-
-    @staticmethod
-    def _tag_assignments(text: str, tag_catalog: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
-        normalized = _normalize(text)
-        capability = "tag_delivery_excellence"
-        if any(word in normalized for word in ("platform", "developer", "engineering")):
-            capability = "tag_platform_engineering"
-        elif any(word in normalized for word in ("ai", "llm", "machine learning")):
-            capability = "tag_ai_adoption"
-        elif any(word in normalized for word in ("automated", "automation")):
-            capability = "tag_automation"
-        elif any(word in normalized for word in ("cost", "saving", "saved", "budget")):
-            capability = "tag_cost_optimization"
-        elif any(word in normalized for word in ("governance", "decision", "control")):
-            capability = "tag_governance"
-
-        theme = "tag_capability_building"
-        if re.search(r"\d+%|€|\$|£|saved|reduced|increased|improved", normalized):
-            theme = "tag_measurable_business_value"
-        elif any(word in normalized for word in ("simplified", "standard", "reusable")):
-            theme = "tag_simplifying_complexity"
-        elif any(word in normalized for word in ("scaled", "growth", "teams")):
-            theme = "tag_scaling_through_systems"
-
-        known = {tag["id"] for tag in tag_catalog.get("tags", [])}
-        if capability not in known:
-            capability = next(tag["id"] for tag in tag_catalog["tags"] if tag["type"] == "capability")
-        if theme not in known:
-            theme = next(tag["id"] for tag in tag_catalog["tags"] if tag["type"] == "narrative_theme")
-        return {
-            "capabilities": [
-                {
-                    "tag_id": capability,
-                    "confidence": 0.6,
-                    "rationale": "Assigned by Sprint 3 deterministic keyword rules for manual evidence.",
-                }
-            ],
-            "narrative_themes": [
-                {
-                    "tag_id": theme,
-                    "confidence": 0.6,
-                    "rationale": "Assigned by Sprint 3 deterministic keyword rules for manual evidence.",
                 }
             ],
         }

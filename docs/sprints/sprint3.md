@@ -132,6 +132,8 @@ Completed locally:
 - Local UI tabs for file upload, pasted CV text and adding an achievement.
 - Dev-facing reconciliation summary and stage timings surfaced in the UI.
 - Automated tests for pasted CV adaptation, duplicate reconciliation and adding an achievement.
+- Track A first pass: staged extraction provider that asks the model for compact roles and achievements, then maps deterministically into the full DCT schema.
+- Source-derived candidate Twin cache keyed by content hash, with `DCTWIN_MODEL_PATH=full` retained for comparison against the older one-shot path.
 
 Addendum: Performance strategy
 
@@ -151,5 +153,6 @@ Track B — Improve perceived latency
 Pending:
 
 - End-to-end test with a second real CV through Foundry.
+- Measure staged extraction against the previous 106-second full-DCT baseline.
 - Tune near-duplicate thresholds against multiple real CVs.
 - Decide whether possible duplicates should remain appended silently or become a review surface in a later sprint.
