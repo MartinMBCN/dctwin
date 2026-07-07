@@ -133,6 +133,21 @@ Completed locally:
 - Dev-facing reconciliation summary and stage timings surfaced in the UI.
 - Automated tests for pasted CV adaptation, duplicate reconciliation and adding an achievement.
 
+Addendum: Performance strategy
+
+Track A — Reduce actual latency
+- Decompose full-Twin generation into staged, smaller model calls.
+- Add deterministic source preview before model invocation.
+- Cache source-derived outputs by content hash.
+- Regenerate only changed Twin projections where possible.
+
+Track B — Improve perceived latency
+- Replace blocking spinner with staged progress.
+- Render source preview immediately.
+- Render provisional roles and achievements before final reflection.
+- Show timings and current stage in dev mode.
+- Treat 30 seconds as a hard UX failure threshold.
+
 Pending:
 
 - End-to-end test with a second real CV through Foundry.
