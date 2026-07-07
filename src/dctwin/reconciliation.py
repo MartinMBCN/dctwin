@@ -37,8 +37,8 @@ class ReconciliationSummary:
 class ReconciliationAgent:
     """Merge new candidate evidence into an existing canonical Twin."""
 
-    exact_threshold = 0.96
-    possible_threshold = 0.82
+    exact_threshold = 0.86
+    possible_threshold = 0.72
 
     def reconcile(
         self,
@@ -137,7 +137,7 @@ class ReconciliationAgent:
         self._merge_person_facts(twin, candidate, actions)
         self._merge_gaps(twin, candidate)
         self._merge_inferences(twin, candidate)
-        self._refresh_reflection(twin)
+        self._refresh_reflection(twin, candidate)
         twin["generated_at"] = datetime.now(UTC).isoformat()
 
         return twin, ReconciliationSummary(
@@ -337,16 +337,7 @@ class ReconciliationAgent:
     ) -> tuple[dict[str, Any], float] | None:
         best: tuple[dict[str, Any], float] | None = None
         for existing in twin.get("evidence_items", []):
-            role_boost = 0.08 if existing.get("role_id") == incoming.get("role_id") else 0
-            metric_boost = 0.04 if _metrics(existing.get("text")) & _metrics(incoming.get("text")) else 0
-            score = min(
-                1.0,
-                SequenceMatcher(
-                    None, _normalize(existing.get("text")), _normalize(incoming.get("text"))
-                ).ratio()
-                + role_boost
-                + metric_boost,
-            )
+            score = _evidence_similarity(existing, incoming)
             if best is None or score > best[1]:
                 best = (existing, score)
         if best and best[1] >= self.possible_threshold:
@@ -429,48 +420,82 @@ class ReconciliationAgent:
                 existing_ids.add(gap.get("id"))
                 existing.add(key)
 
-    @staticmethod
-    def _merge_inferences(twin: dict[str, Any], candidate: dict[str, Any]) -> None:
-        existing = {(item.get("kind"), _normalize(item.get("value"))) for item in twin.get("inferences", [])}
+    def _merge_inferences(self, twin: dict[str, Any], candidate: dict[str, Any]) -> None:
         existing_ids = {item.get("id") for item in twin.get("inferences", [])}
         evidence_ids = {item.get("id") for item in twin.get("evidence_items", [])}
         for inference in candidate.get("inferences", []):
-            key = (inference.get("kind"), _normalize(inference.get("value")))
             inference["supporting_evidence_ids"] = [
                 item for item in inference.get("supporting_evidence_ids", []) if item in evidence_ids
             ]
-            if key not in existing and inference["supporting_evidence_ids"]:
-                if inference.get("id") in existing_ids:
-                    inference["id"] = ReconciliationAgent._unique_id(
-                        "inf", f"{inference.get('kind')} {inference.get('value')}", existing_ids
-                    )
-                twin.setdefault("inferences", []).append(inference)
-                existing_ids.add(inference.get("id"))
-                existing.add(key)
+            if not inference["supporting_evidence_ids"]:
+                continue
+            existing = self._find_matching_inference(twin, inference)
+            if existing is not None:
+                self._merge_inference(existing, inference)
+                continue
+            if inference.get("id") in existing_ids:
+                inference["id"] = ReconciliationAgent._unique_id(
+                    "inf", f"{inference.get('kind')} {inference.get('value')}", existing_ids
+                )
+            twin.setdefault("inferences", []).append(inference)
+            existing_ids.add(inference.get("id"))
 
     @staticmethod
-    def _refresh_reflection(twin: dict[str, Any]) -> None:
-        roles = len(twin.get("roles", []))
-        evidence = len(twin.get("evidence_items", []))
-        sources = len(twin.get("sources", []))
-        supported = [
-            item.get("text", "")
-            for item in twin.get("evidence_items", [])[:5]
-            if item.get("text")
-        ]
-        unclear = [
-            gap.get("resolution_question", "")
-            for gap in twin.get("gaps", [])[:5]
-            if gap.get("resolution_question")
-        ]
+    def _find_matching_inference(
+        twin: dict[str, Any],
+        incoming: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        incoming_tokens = _meaningful_tokens(incoming.get("value"))
+        for existing in twin.get("inferences", []):
+            if existing.get("kind") != incoming.get("kind"):
+                continue
+            token_score = _jaccard(incoming_tokens, _meaningful_tokens(existing.get("value")))
+            text_score = SequenceMatcher(
+                None, _normalize(existing.get("value")), _normalize(incoming.get("value"))
+            ).ratio()
+            if max(token_score, text_score) >= 0.62:
+                return existing
+        return None
+
+    @staticmethod
+    def _merge_inference(target: dict[str, Any], incoming: dict[str, Any]) -> None:
+        support = list(dict.fromkeys([
+            *target.get("supporting_evidence_ids", []),
+            *incoming.get("supporting_evidence_ids", []),
+        ]))
+        target["supporting_evidence_ids"] = support
+        target["confidence"] = max(target.get("confidence", 0), incoming.get("confidence", 0))
+        if len(str(incoming.get("rationale", ""))) > len(str(target.get("rationale", ""))):
+            target["rationale"] = incoming.get("rationale")
+        target["alternatives"] = list(dict.fromkeys([
+            *target.get("alternatives", []),
+            *incoming.get("alternatives", []),
+        ]))
+
+    @staticmethod
+    def _refresh_reflection(
+        twin: dict[str, Any],
+        candidate: dict[str, Any] | None = None,
+    ) -> None:
+        existing_reflection = twin.get("reflection", {})
+        candidate_reflection = (candidate or {}).get("reflection", {})
+        summary = candidate_reflection.get("summary") or existing_reflection.get("summary") or ""
+        if summary.startswith("This staged extraction found"):
+            summary = existing_reflection.get("summary", summary)
+        supported = _merge_short_lists(
+            candidate_reflection.get("strongly_supported", []),
+            existing_reflection.get("strongly_supported", []),
+            [inference.get("value", "") for inference in twin.get("inferences", [])],
+            limit=8,
+        )
+        unclear = _merge_short_lists(
+            candidate_reflection.get("unclear", []),
+            existing_reflection.get("unclear", []),
+            [gap.get("resolution_question", "") for gap in twin.get("gaps", [])],
+            limit=6,
+        )
         twin["reflection"] = {
-            "summary": (
-                f"Your Twin currently integrates {evidence} evidence item"
-                f"{'' if evidence == 1 else 's'} across {roles} role"
-                f"{'' if roles == 1 else 's'} and {sources} source"
-                f"{'' if sources == 1 else 's'}. The latest update refreshed the "
-                "canonical model rather than creating a separate CV-shaped output."
-            ),
+            "summary": summary,
             "strongly_supported": supported,
             "unclear": unclear,
             "suggested_questions": unclear,
@@ -522,4 +547,93 @@ def _normalize(value: Any) -> str:
 
 
 def _metrics(value: Any) -> set[str]:
-    return set(re.findall(r"(?:\d+(?:\.\d+)?%|[€$£]\s?\d+(?:\.\d+)?[kmb]?)", str(value or "").lower()))
+    text = str(value or "").lower()
+    return set(
+        re.findall(
+            r"(?:>\s?)?(?:\d+(?:\.\d+)?%|[€$£]\s?\d+(?:\.\d+)?[kmb]?|\d+(?:\.\d+)?\s?(?:m|k|million|markets?|staff|cohorts?))",
+            text,
+        )
+    )
+
+
+def _evidence_similarity(existing: dict[str, Any], incoming: dict[str, Any]) -> float:
+    # General duplicate heuristic:
+    # - exact phrasing is useful but insufficient for CV variants;
+    # - shared numbers/currency and role context are strong evidence;
+    # - token containment catches concise vs elaborated rephrasings.
+    # This intentionally avoids source- or example-specific rules.
+    existing_text = existing.get("text")
+    incoming_text = incoming.get("text")
+    normalized_existing = _normalize(existing_text)
+    normalized_incoming = _normalize(incoming_text)
+    sequence = SequenceMatcher(None, normalized_existing, normalized_incoming).ratio()
+    existing_tokens = _meaningful_tokens(existing_text)
+    incoming_tokens = _meaningful_tokens(incoming_text)
+    token_score = _jaccard(existing_tokens, incoming_tokens)
+    containment = _containment(existing_tokens, incoming_tokens)
+    metrics_existing = _metrics(existing_text)
+    metrics_incoming = _metrics(incoming_text)
+    metric_score = _jaccard(metrics_existing, metrics_incoming)
+    score = max(sequence, token_score, containment * 0.95)
+    if existing.get("role_id") == incoming.get("role_id"):
+        score += 0.08
+    if metrics_existing and metrics_incoming:
+        score += min(0.18, metric_score * 0.18)
+    return min(1.0, score)
+
+
+def _meaningful_tokens(value: Any) -> set[str]:
+    stopwords = {
+        "a",
+        "an",
+        "and",
+        "by",
+        "for",
+        "from",
+        "in",
+        "into",
+        "of",
+        "the",
+        "through",
+        "to",
+        "with",
+    }
+    return {
+        _stem(token)
+        for token in re.findall(r"[a-z0-9€$£>]+", str(value or "").lower())
+        if token not in stopwords and len(token) > 1
+    }
+
+
+def _stem(token: str) -> str:
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(token) > len(suffix) + 3 and token.endswith(suffix):
+            return token[: -len(suffix)]
+    return token
+
+
+def _jaccard(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    return len(left & right) / len(left | right)
+
+
+def _containment(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    return len(left & right) / min(len(left), len(right))
+
+
+def _merge_short_lists(*lists: list[str], limit: int) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for values in lists:
+        for value in values:
+            text = str(value or "").strip()
+            key = _normalize(text)
+            if text and key not in seen:
+                merged.append(text)
+                seen.add(key)
+            if len(merged) >= limit:
+                return merged
+    return merged
