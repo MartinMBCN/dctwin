@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from dctwin.io import load_json
-from dctwin.twin_builder import build_twin_from_extraction
+from dctwin.twin_builder import build_twin_from_extraction, tag_assignments
 from dctwin.validation import validate_twin
 
 
@@ -74,3 +74,20 @@ def test_build_twin_from_compact_extraction_produces_valid_dct() -> None:
     assert twin["reflection"]["summary"].startswith("Alex shows a pattern")
     assert twin["inferences"][0]["value"] == "Platform engineering for delivery acceleration"
     validate_twin(twin, schema, catalog, source_documents=[source])
+
+
+def test_fast_tagger_assigns_multiple_capabilities_for_infrastructure_cost_work() -> None:
+    catalog = load_json(ROOT / "catalogs/tag_catalog.json")
+
+    assignments = tag_assignments(
+        "Reduced AWS costs by 37% ($1.1M annually) through Kubernetes transformation and infrastructure rationalization.",
+        catalog,
+    )
+
+    capabilities = {item["tag_id"] for item in assignments["capabilities"]}
+    themes = {item["tag_id"] for item in assignments["narrative_themes"]}
+    assert "tag_cost_optimization" in capabilities
+    assert "tag_platform_engineering" in capabilities
+    assert "tag_cloud_infrastructure_management" in capabilities
+    assert "tag_measurable_business_value" in themes
+    assert "tag_simplifying_complexity" in themes

@@ -27,7 +27,14 @@
       "type": "capability",
       "name": "Platform engineering",
       "description": "Building and operating reusable technical capabilities that improve the experience and performance of delivery teams.",
-      "aliases": ["internal developer platform", "engineering platform"]
+      "aliases": ["internal developer platform", "engineering platform", "Kubernetes platform", "container platform"]
+    },
+    {
+      "id": "tag_cloud_infrastructure_management",
+      "type": "capability",
+      "name": "Cloud infrastructure management",
+      "description": "Designing, rationalizing and operating cloud infrastructure, container platforms and hosting foundations for reliability, cost and delivery outcomes.",
+      "aliases": ["cloud infrastructure", "infrastructure management", "Kubernetes", "AWS", "container orchestration", "infrastructure rationalization"]
     },
     {
       "id": "tag_delivery_excellence",

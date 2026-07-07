@@ -149,47 +149,73 @@ def classify_evidence(text: str) -> str:
 
 def tag_assignments(text: str, tag_catalog: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     normalized = _normalize(text)
-    capability = "tag_delivery_excellence"
-    if any(word in normalized for word in ("platform", "developer", "engineering")):
-        capability = "tag_platform_engineering"
-    elif any(word in normalized for word in ("ai", "llm", "machine learning")):
-        capability = "tag_ai_adoption"
-    elif any(word in normalized for word in ("automated", "automation")):
-        capability = "tag_automation"
-    elif any(word in normalized for word in ("cost", "saving", "saved", "budget")):
-        capability = "tag_cost_optimization"
-    elif any(word in normalized for word in ("governance", "decision", "control")):
-        capability = "tag_governance"
-
-    theme = "tag_capability_building"
-    if re.search(r"\d+%|€|\$|£|saved|reduced|increased|improved", normalized):
-        theme = "tag_measurable_business_value"
-    elif any(word in normalized for word in ("simplified", "standard", "reusable")):
-        theme = "tag_simplifying_complexity"
-    elif any(word in normalized for word in ("scaled", "growth", "teams")):
-        theme = "tag_scaling_through_systems"
-
     known = {tag["id"] for tag in tag_catalog.get("tags", [])}
-    if capability not in known:
-        capability = next(tag["id"] for tag in tag_catalog["tags"] if tag["type"] == "capability")
-    if theme not in known:
-        theme = next(tag["id"] for tag in tag_catalog["tags"] if tag["type"] == "narrative_theme")
+    capability_ids: list[str] = []
+    if any(word in normalized for word in ("platform", "developer", "engineering", "kubernetes", "container")):
+        capability_ids.append("tag_platform_engineering")
+    if any(word in normalized for word in ("aws", "azure", "cloud", "kubernetes", "container", "infrastructure", "hosting")):
+        capability_ids.append("tag_cloud_infrastructure_management")
+    if any(word in normalized for word in ("ai", "llm", "machine learning")):
+        capability_ids.append("tag_ai_adoption")
+    if any(word in normalized for word in ("automated", "automation")):
+        capability_ids.append("tag_automation")
+    if any(word in normalized for word in ("cost", "saving", "saved", "budget", "$", "€", "£")):
+        capability_ids.append("tag_cost_optimization")
+    if any(word in normalized for word in ("governance", "decision", "control")):
+        capability_ids.append("tag_governance")
+    if any(word in normalized for word in ("release", "delivery", "deployment", "quality", "predictability")):
+        capability_ids.append("tag_delivery_excellence")
+    if not capability_ids:
+        capability_ids.append("tag_delivery_excellence")
+
+    theme_ids: list[str] = []
+    if re.search(r"\d+%|€|\$|£|saved|reduced|increased|improved", normalized):
+        theme_ids.append("tag_measurable_business_value")
+    if any(word in normalized for word in ("simplified", "standard", "reusable", "rationalization", "rationalisation")):
+        theme_ids.append("tag_simplifying_complexity")
+    if any(word in normalized for word in ("scaled", "scaling", "growth", "teams", "platform")):
+        theme_ids.append("tag_scaling_through_systems")
+    if not theme_ids:
+        theme_ids.append("tag_capability_building")
+
+    capability_ids = _known_unique(
+        capability_ids,
+        known,
+        fallback=next(tag["id"] for tag in tag_catalog["tags"] if tag["type"] == "capability"),
+    )[:4]
+    theme_ids = _known_unique(
+        theme_ids,
+        known,
+        fallback=next(tag["id"] for tag in tag_catalog["tags"] if tag["type"] == "narrative_theme"),
+    )[:3]
     return {
         "capabilities": [
             {
-                "tag_id": capability,
+                "tag_id": tag_id,
                 "confidence": 0.6,
                 "rationale": "Assigned by fast deterministic keyword rules.",
             }
+            for tag_id in capability_ids
         ],
         "narrative_themes": [
             {
-                "tag_id": theme,
+                "tag_id": tag_id,
                 "confidence": 0.6,
                 "rationale": "Assigned by fast deterministic keyword rules.",
             }
+            for tag_id in theme_ids
         ],
     }
+
+
+def _known_unique(tag_ids: list[str], known: set[str], *, fallback: str) -> list[str]:
+    selected: list[str] = []
+    for tag_id in tag_ids:
+        if tag_id in known and tag_id not in selected:
+            selected.append(tag_id)
+    if not selected:
+        selected.append(fallback)
+    return selected
 
 
 def _source_label(source_document: dict[str, Any]) -> str:

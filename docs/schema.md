@@ -28,7 +28,7 @@ Facts are directly stated claims. Each fact has at least one source reference. `
 
 Roles provide chronological and organizational context. Evidence is the atomic unit of professional proof. Evidence normally references a role, but may instead use another explicit context for education or cross-career material.
 
-Every evidence item must have at least one entry in `tag_assignments.capabilities` and one in `tag_assignments.narrative_themes`. The assignment stores its own confidence and rationale because confidence belongs to the relationship, not to the tag itself.
+Every evidence item must have at least one entry in `tag_assignments.capabilities` and one in `tag_assignments.narrative_themes`. These are multi-label assignments, not a single best-fit category: one achievement can simultaneously indicate cost optimization, platform engineering and cloud infrastructure management. The assignment stores its own confidence and rationale because confidence belongs to the relationship, not to the tag itself.
 
 ### Inferences
 
