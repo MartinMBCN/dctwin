@@ -239,7 +239,9 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
                 "You are the fast extraction stage for a Digital Career Twin. "
                 "Return compact, source-grounded JSON only. Extract all clear roles "
                 "and material achievements/responsibilities, preserving source block "
-                "references and quotes. Also provide a concise interpretation: recurring "
+                "references and quotes. Preserve role start and end dates when the source "
+                "states them; use YYYY, YYYY-MM, or YYYY-MM-DD. For current/present roles, "
+                "preserve the start date and use null for the end date. Also provide a concise interpretation: recurring "
                 "patterns, capability hypotheses, unclear questions, and a reflective "
                 "summary. Do not produce the full DCT schema."
             ),
@@ -313,8 +315,14 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
                             "id": {"type": "string"},
                             "title": {"type": "string"},
                             "organization": {"type": "string"},
-                            "start_date": {"type": ["string", "null"]},
-                            "end_date": {"type": ["string", "null"]},
+                            "start_date": {
+                                "type": ["string", "null"],
+                                "description": "Role start date from the source using YYYY, YYYY-MM, or YYYY-MM-DD. Use null only if absent.",
+                            },
+                            "end_date": {
+                                "type": ["string", "null"],
+                                "description": "Role end date from the source using YYYY, YYYY-MM, or YYYY-MM-DD. Use null for current/present roles or if absent.",
+                            },
                             "summary": {"type": "string"},
                             **source_ref_properties,
                         },

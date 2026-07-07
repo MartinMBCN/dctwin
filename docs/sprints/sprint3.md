@@ -135,6 +135,9 @@ Completed locally:
 - Track A first pass: staged extraction provider that asks the model for compact roles and achievements, then maps deterministically into the full DCT schema.
 - Source-derived candidate Twin cache keyed by content hash, with `DCTWIN_MODEL_PATH=full` retained for comparison against the older one-shot path.
 - Track B first pass: the local UI now explains extraction, compact interpretation, deterministic Twin construction and validation during the wait.
+- Reconciliation now treats near-duplicate achievements as a generic matching problem: shared core event/entity language plus shared measurable outcomes should merge provenance rather than create duplicate career facts.
+- Role-date handling is split between model extraction and deterministic normalization: the extraction contract asks for source dates, while the mapper tolerates noisy date strings and can recover dates from role quotes.
+- The staged progress UI now reveals only the active/completed steps and shows processing time beside completed steps, using user-facing labels rather than implementation jargon.
 
 Addendum: Performance strategy
 
@@ -170,6 +173,7 @@ Track B — Improve perceived latency
 - Render provisional roles and achievements before final reflection.
 - Show timings and current stage in dev mode.
 - Treat 30 seconds as a hard UX failure threshold.
+- Record UI progress behaviour as an architectural/product decision because it supports trust during agentic ingestion rather than merely styling the page.
 
 Pending:
 

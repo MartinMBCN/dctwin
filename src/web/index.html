@@ -93,12 +93,13 @@
     .status-card { padding: 18px; border: 1px solid #e3c789; background: var(--amber-soft); border-radius: 14px; margin-bottom: 12px; }
     .status-card strong { display: block; color: #704b10; margin-bottom: 5px; }
     .stage-list { display: grid; gap: 10px; text-align: left; margin-top: 18px; }
-    .stage-row { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; padding: 11px 12px; border-radius: 12px; background: #f1f3ee; color: var(--muted); }
+    .stage-row { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; padding: 11px 12px; border-radius: 12px; background: #f1f3ee; color: var(--muted); }
     .stage-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; background: #b6c0ba; box-shadow: 0 0 0 4px rgba(104,117,111,.1); }
     .stage-row.active { background: var(--green-soft); color: var(--ink); }
     .stage-row.active .stage-dot { background: #2b9b73; box-shadow: 0 0 0 4px rgba(43,155,115,.15); }
     .stage-row.complete .stage-dot { background: var(--green); }
     .stage-row strong { display: block; color: var(--ink); }
+    .stage-time { color: var(--muted); font-size: 13px; white-space: nowrap; }
     pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; color: #33413b; }
     .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: #17231f; color: white; border-radius: 10px; padding: 11px 15px; transition: .2s ease; box-shadow: var(--shadow); }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -198,11 +199,11 @@
 
   <script>
     const busyStages = [
-      { at: 0, title: 'Reading your CV', detail: 'Extracting text and separating direct contact details.' },
-      { at: 1200, title: 'Getting roles and achievements', detail: 'Asking the model for transient CVExtractionResult, not the canonical Twin.' },
-      { at: 7000, title: 'Inferring skills and recurring patterns', detail: 'Adding a compact interpretation while the application keeps ownership of the DCT.' },
-      { at: 16000, title: 'Constructing the Twin', detail: 'Creating stable IDs, mapping provenance, and validating the DCT schema.' },
-      { at: 26000, title: 'Still working carefully', detail: 'This run is over the UX target; timings will show exactly where the delay lives.' }
+      { at: 0, title: 'Uploading your CV' },
+      { at: 1200, title: 'Extracting roles and achievements' },
+      { at: 7000, title: 'Identifying your skills and recurring career themes' },
+      { at: 16000, title: 'Constructing your digital twin' },
+      { at: 26000, title: 'Rendering your digital twin for presentation' }
     ];
     const state = { tab: 'mirror', result: null, roles: [], busyTimer: null, busyStarted: 0 };
     const input = document.querySelector('#file-input');
@@ -374,11 +375,21 @@
     }
 
     function renderBusyStage(activeIndex, message) {
-      const rows = busyStages.map((stage, index) => {
+      const elapsed = Date.now() - state.busyStarted;
+      const visibleStages = busyStages.slice(0, activeIndex + 1);
+      const rows = visibleStages.map((stage, index) => {
         const status = index < activeIndex ? 'complete' : index === activeIndex ? 'active' : '';
-        return `<div class="stage-row ${status}"><span class="stage-dot"></span><div><strong>${escapeHtml(stage.title)}</strong>${escapeHtml(stage.detail)}</div></div>`;
+        const completedAt = index < busyStages.length - 1 ? busyStages[index + 1].at : elapsed;
+        const duration = index < activeIndex ? Math.max(0, completedAt - stage.at) : null;
+        const time = duration === null ? '' : `<span class="stage-time">${escapeHtml(formatSeconds(duration))} processing</span>`;
+        return `<div class="stage-row ${status}"><span class="stage-dot"></span><div><strong>${escapeHtml(stage.title)}</strong></div>${time}</div>`;
       }).join('');
-      viewer.innerHTML = `<div class="empty"><div class="empty-inner"><strong>${escapeHtml(message)}</strong>This is split into extraction, interpretation, deterministic Twin construction, and validation.<div class="stage-list">${rows}</div></div></div>`;
+      viewer.innerHTML = `<div class="empty"><div class="empty-inner"><strong>${escapeHtml(message)}</strong><div class="stage-list">${rows}</div></div></div>`;
+    }
+
+    function formatSeconds(ms) {
+      const seconds = Math.max(0.1, ms / 1000);
+      return `${seconds.toFixed(seconds < 10 ? 1 : 0)} seconds`;
     }
 
     function showError(error) {

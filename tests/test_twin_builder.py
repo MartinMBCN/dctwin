@@ -91,3 +91,41 @@ def test_fast_tagger_assigns_multiple_capabilities_for_infrastructure_cost_work(
     assert "tag_cloud_infrastructure_management" in capabilities
     assert "tag_measurable_business_value" in themes
     assert "tag_simplifying_complexity" in themes
+
+
+def test_compact_extraction_mapping_preserves_role_dates_from_noisy_values() -> None:
+    source = load_json(ROOT / "tests/fixtures/valid_source.json")
+    catalog = load_json(ROOT / "catalogs/tag_catalog.json")
+    extraction = {
+        "source_label": "Synthetic CV",
+        "person_name": None,
+        "roles": [
+            {
+                "id": "r1",
+                "title": "Delivery Lead",
+                "organization": "Example Co",
+                "start_date": None,
+                "end_date": "Present",
+                "summary": "Led delivery teams.",
+                "source_block_id": "block_page_1",
+                "quote": "Delivery Lead, Example Co, Mar 2020 — Present",
+                "confidence": 0.8,
+            }
+        ],
+        "achievements": [],
+        "interpretation": {
+            "reflection_summary": "",
+            "recurring_patterns": [],
+            "capability_hypotheses": [],
+            "unclear_questions": [],
+        },
+    }
+
+    twin = build_twin_from_extraction(
+        extraction=extraction,
+        source_document=source,
+        tag_catalog=catalog,
+    )
+
+    assert twin["roles"][0]["start_date"] == "2020-03"
+    assert twin["roles"][0]["end_date"] is None

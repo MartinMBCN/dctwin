@@ -60,10 +60,10 @@ def test_manual_achievement_updates_twin_with_user_entered_source() -> None:
 
 def test_reconciliation_merges_rephrased_evidence_with_shared_metric_and_entities() -> None:
     existing = _twin_with_evidence(
-        "Identified vendor-driven cost anomaly and avoided up to $1M in non-value spend."
+        "Identified supplier-driven cost anomaly and avoided up to $900K in non-value spend."
     )
     incoming = _twin_with_evidence(
-        "Avoided up to $1M in non-value spend by identifying vendor-caused spend anomaly and modeling risk across cohorts.",
+        "Avoided up to $900K in non-value spend by identifying supplier-caused spend anomaly and modelling risk across cohorts.",
         source_id="src_second_cv",
     )
 
@@ -79,10 +79,10 @@ def test_reconciliation_merges_rephrased_evidence_with_shared_metric_and_entitie
 
 def test_reconciliation_merges_rephrased_scaling_evidence_with_shared_numbers() -> None:
     existing = _twin_with_evidence(
-        "Scaled marketplace engineering from 20 to 65 staff supporting expansion to 13 marketplaces and 3 new markets generating >€200M."
+        "Scaled marketplace engineering from 18 to 60 staff supporting expansion to 11 marketplaces and 2 new markets generating >€180M."
     )
     incoming = _twin_with_evidence(
-        "Scaled marketplace engineering from 20 to 65 staff and enabled expansion into three markets generating >€200M.",
+        "Scaled marketplace engineering from 18 to 60 staff and enabled expansion into two markets generating >€180M.",
         source_id="src_second_cv",
     )
 
@@ -92,6 +92,25 @@ def test_reconciliation_merges_rephrased_scaling_evidence_with_shared_numbers() 
     )
 
     assert summary.evidence_merged == 1
+    assert len(updated["evidence_items"]) == 1
+
+
+def test_reconciliation_merges_partial_overlap_evidence_with_shared_core_event_and_metric() -> None:
+    existing = _twin_with_evidence(
+        "Launched support chatbot and scaled adoption from 4,000 beta users to 1.8M customers in five months."
+    )
+    incoming = _twin_with_evidence(
+        "Launched support chatbot, scaled to 1.8M customers in five months, reducing support calls 12%.",
+        source_id="src_second_cv",
+    )
+
+    updated, summary = ReconciliationAgent().reconcile(
+        existing_twin=existing,
+        candidate_twin=incoming,
+    )
+
+    assert summary.evidence_merged == 1
+    assert summary.evidence_added == 0
     assert len(updated["evidence_items"]) == 1
 
 

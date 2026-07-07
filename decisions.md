@@ -76,3 +76,39 @@ An email address supports authentication, contact and enrollment, but it is not 
 
 Consequence:
 The account system owns verified contact identifiers and links to the Twin through an opaque owner ID. The Source Adapter may propose an email as an enrollment candidate, but account creation requires possession verification and user confirmation. The candidate artifact is private, is not sent to the model, and is not part of the canonical DCT schema.
+
+---
+
+## ADR-009
+Models extract source-grounded evidence; the application constructs the canonical Twin.
+
+Reason:
+Asking a model to emit the full Digital Career Twin makes the model responsible for domain architecture, stable identifiers, provenance mapping, reconciliation and schema validity. That path is slower, more brittle and harder to evaluate. The DCT philosophy requires the Twin Repository to own the canonical model.
+
+Consequence:
+The default CV path is:
+
+`source → normalized source document → transient CVExtractionResult → deterministic mapper → canonical DCT → reconciliation`
+
+The model is responsible for identifying roles, extracting achievements and other professional evidence, preserving source snippets, adding confidence, and providing compact interpretation where useful. The application is responsible for creating source records, assigning stable IDs, mapping roles and evidence into the DCT schema, validating the schema, reconciling against the current Twin, and updating canonical inferences/reflection.
+
+The full DCT schema remains the acceptance boundary. `CVExtractionResult` is a transient extraction contract only; it must not become a second domain model or a competing "mini Twin."
+
+---
+
+## ADR-010
+Perceived progress is part of the ingestion experience, not decoration.
+
+Reason:
+CV ingestion involves unavoidable latency while text is extracted, evidence is interpreted, the Twin is constructed and results are rendered. A blank wait creates uncertainty and reduces trust. A staged progress experience helps the user understand that useful work is happening and makes the wait feel shorter, especially while production latency is being optimized.
+
+Consequence:
+The local UI reveals ingestion stages only as they become active and shows elapsed processing time beside completed stages. The user-facing stages are:
+
+- Uploading your CV
+- Extracting roles and achievements
+- Identifying your skills and recurring career themes
+- Constructing your digital twin
+- Rendering your digital twin for presentation
+
+This is deliberately aligned with the architecture: the UI should expose meaningful system progress without exposing internal jargon such as schema validation, transient contracts or orchestration details. Developer-facing timing and reconciliation logs may remain available for tuning.

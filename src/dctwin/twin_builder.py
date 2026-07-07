@@ -39,13 +39,14 @@ def build_twin_from_extraction(
         role_ids_by_index[index] = role_id
         if role.get("id"):
             role_ids_by_original[str(role["id"])] = role_id
+        start_date, end_date = _role_dates(role)
         roles.append(
             {
                 "id": role_id,
                 "title": role.get("title") or "Unspecified role",
                 "organization": role.get("organization") or "Unspecified organization",
-                "start_date": _date_or_none(role.get("start_date")),
-                "end_date": _date_or_none(role.get("end_date")),
+                "start_date": start_date,
+                "end_date": end_date,
                 "summary": role.get("summary") or "",
                 "extraction_confidence": _confidence(role.get("confidence"), default=0.7),
                 "source_refs": [_source_ref(source_id, role, source_document)],
@@ -355,14 +356,69 @@ def _evidence_ids_for_indexes(
     return evidence_ids
 
 
+def _role_dates(role: dict[str, Any]) -> tuple[str | None, str | None]:
+    start_date = _date_or_none(role.get("start_date"))
+    end_date = _date_or_none(role.get("end_date"))
+    if start_date is not None:
+        return start_date, end_date
+
+    quoted_dates = _dates_from_text(role.get("quote"))
+    if not quoted_dates:
+        return start_date, end_date
+    inferred_start = quoted_dates[0]
+    inferred_end = quoted_dates[1] if len(quoted_dates) > 1 else end_date
+    return inferred_start, inferred_end
+
+
 def _date_or_none(value: Any) -> str | None:
     if value is None:
         return None
     text = str(value).strip()
     if not text:
         return None
-    match = re.match(r"^\d{4}(?:-\d{2})?(?:-\d{2})?$", text)
-    return text if match else None
+    if text.lower() in {"present", "current", "now", "ongoing"}:
+        return None
+    exact = re.match(r"^\d{4}(?:-\d{2})?(?:-\d{2})?$", text)
+    if exact:
+        return text
+    embedded = re.search(r"\d{4}(?:-\d{2})?(?:-\d{2})?", text)
+    return embedded.group(0) if embedded else None
+
+
+def _dates_from_text(value: Any) -> list[str]:
+    text = str(value or "")
+    dates: list[str] = []
+    for month, year in re.findall(
+        r"\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+        r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|"
+        r"dec(?:ember)?)\s+(\d{4})\b",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        dates.append(f"{year}-{_month_number(month)}")
+    for year in re.findall(r"\b(?:19|20)\d{2}\b", text):
+        if not any(date.startswith(year) for date in dates):
+            dates.append(year)
+    return dates[:2]
+
+
+def _month_number(value: str) -> str:
+    month = value[:3].lower()
+    months = {
+        "jan": "01",
+        "feb": "02",
+        "mar": "03",
+        "apr": "04",
+        "may": "05",
+        "jun": "06",
+        "jul": "07",
+        "aug": "08",
+        "sep": "09",
+        "oct": "10",
+        "nov": "11",
+        "dec": "12",
+    }
+    return months[month]
 
 
 def _confidence(value: Any, *, default: float) -> float:

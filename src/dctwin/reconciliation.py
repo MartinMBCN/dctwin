@@ -550,7 +550,10 @@ def _metrics(value: Any) -> set[str]:
     text = str(value or "").lower()
     return set(
         re.findall(
-            r"(?:>\s?)?(?:\d+(?:\.\d+)?%|[€$£]\s?\d+(?:\.\d+)?[kmb]?|\d+(?:\.\d+)?\s?(?:m|k|million|markets?|staff|cohorts?))",
+            r"(?:>\s?)?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?%?|"
+            r"\d+(?:\.\d+)?%|[€$£]\s?\d{1,3}(?:,\d{3})+(?:\.\d+)?[kmb]?|"
+            r"[€$£]\s?\d+(?:\.\d+)?[kmb]?|"
+            r"\d+(?:\.\d+)?\s?(?:m|k|million|markets?|staff|cohorts?|customers?|users?|months?|years?))",
             text,
         )
     )
@@ -574,11 +577,16 @@ def _evidence_similarity(existing: dict[str, Any], incoming: dict[str, Any]) -> 
     metrics_existing = _metrics(existing_text)
     metrics_incoming = _metrics(incoming_text)
     metric_score = _jaccard(metrics_existing, metrics_incoming)
+    signature_score = _signature_similarity(existing_tokens, incoming_tokens)
     score = max(sequence, token_score, containment * 0.95)
     if existing.get("role_id") == incoming.get("role_id"):
         score += 0.08
     if metrics_existing and metrics_incoming:
         score += min(0.18, metric_score * 0.18)
+    if metrics_existing & metrics_incoming:
+        score = max(score, signature_score + 0.18)
+        if containment >= 0.5:
+            score = max(score, 0.88)
     return min(1.0, score)
 
 
@@ -597,6 +605,9 @@ def _meaningful_tokens(value: Any) -> set[str]:
         "through",
         "to",
         "with",
+        "across",
+        "via",
+        "using",
     }
     return {
         _stem(token)
@@ -622,6 +633,47 @@ def _containment(left: set[str], right: set[str]) -> float:
     if not left or not right:
         return 0.0
     return len(left & right) / min(len(left), len(right))
+
+
+def _signature_similarity(left: set[str], right: set[str]) -> float:
+    """Compare the core event/entity words without requiring identical outcomes."""
+
+    low_information = {
+        "achiev",
+        "achievement",
+        "business",
+        "customer",
+        "customers",
+        "deliv",
+        "enable",
+        "enabled",
+        "improv",
+        "increase",
+        "increased",
+        "led",
+        "measur",
+        "month",
+        "months",
+        "outcome",
+        "reduc",
+        "reduced",
+        "scal",
+        "scaled",
+        "support",
+        "supporting",
+        "team",
+        "teams",
+        "user",
+        "users",
+        "value",
+    }
+    left_signature = {
+        token for token in left if not token.isdigit() and token not in low_information
+    }
+    right_signature = {
+        token for token in right if not token.isdigit() and token not in low_information
+    }
+    return _containment(left_signature, right_signature)
 
 
 def _merge_short_lists(*lists: list[str], limit: int) -> list[str]:
