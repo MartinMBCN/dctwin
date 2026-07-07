@@ -120,3 +120,21 @@ Mirror UX redesign and editing experience (Sprint 5)
 LinkedIn ingestion
 Advanced conflict resolution beyond REQUEST_USER_CONFIRMATION
 Performance optimization beyond instrumentation and bottleneck identification
+
+Implementation status — 2026-07-07
+
+Completed locally:
+
+- Local session Twin state stored as ignored development JSON under `.dctwin-local/`.
+- Pasted CV text path treated as source type `cv` and media type `text/plain`.
+- User-facing manual entry renamed to "Add an achievement"; internally it becomes `user_entered_data`.
+- Reconciliation Agent with deterministic role matching, evidence similarity matching, duplicate provenance merge and possible-duplicate append.
+- Local UI tabs for file upload, pasted CV text and adding an achievement.
+- Dev-facing reconciliation summary and stage timings surfaced in the UI.
+- Automated tests for pasted CV adaptation, duplicate reconciliation and adding an achievement.
+
+Pending:
+
+- End-to-end test with a second real CV through Foundry.
+- Tune near-duplicate thresholds against multiple real CVs.
+- Decide whether possible duplicates should remain appended silently or become a review surface in a later sprint.

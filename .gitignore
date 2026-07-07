@@ -7,6 +7,7 @@ __pycache__/
 
 # Personal source material and locally generated Twins never enter Git.
 private/
+.dctwin-local/
 *.private.json
 
 # Build and coverage output.

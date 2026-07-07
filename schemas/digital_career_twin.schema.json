@@ -128,7 +128,7 @@
         "id": { "$ref": "#/$defs/sourceId" },
         "type": {
           "type": "string",
-          "enum": ["cv", "linkedin_profile", "portfolio", "interview_transcript", "story", "user_correction", "other"]
+          "enum": ["cv", "linkedin_profile", "portfolio", "interview_transcript", "story", "user_entered_data", "user_correction", "other"]
         },
         "label": { "type": "string", "minLength": 1 },
         "adapter": { "type": "string", "minLength": 1 },

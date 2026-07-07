@@ -2,22 +2,27 @@
 
 The Digital Career Twin (DCT) is a canonical, evidence-based representation of a person's professional identity. Documents and conversations update the Twin; Career Mirrors, CVs and other views are generated projections.
 
-This repository is currently implementing Sprint 2: adapt a CV into a schema-valid candidate Twin and emit the first Career Mirror as JSON.
+This repository is currently implementing Sprint 3: update a local session Twin from additional CV sources and user-entered achievements without duplicating evidence already represented.
 
 ## Current vertical slice
 
 ```text
-CV source
+CV source or user-entered achievement
   → Source Adapter registry
       → PDF CV strategy
       → DOCX CV strategy
+      → pasted-text CV path
   → separated outputs
       → minimized normalized source document
       → private unverified enrollment candidates
   → Source Adapter Agent / model provider
   → candidate Digital Career Twin
+  → Reconciliation Agent
+      → add new evidence
+      → merge duplicate provenance
+      → append possible duplicates with context
   → deterministic acceptance validation
-  → JSON Career Mirror
+  → updated JSON Career Mirror
 ```
 
 PDF and DOCX are formats, not source types. Both strategies produce the same source contract. Future LinkedIn, portfolio, interview and correction sources can add strategies without changing downstream orchestration.
@@ -28,6 +33,7 @@ PDF and DOCX are formats, not source types. Both strategies produce the same sou
 - `catalogs/` — controlled capability and narrative-theme tags.
 - `src/dctwin/adapters/` — source-format strategies and registry.
 - `src/dctwin/agent.py` — Source Adapter Agent orchestration boundary.
+- `src/dctwin/reconciliation.py` — deterministic Sprint 3 reconciliation boundary.
 - `src/dctwin/validation.py` — schema and referential-integrity acceptance checks.
 - `prompts/` — source-agnostic agent and CV-specific instructions.
 - `tests/` — synthetic fixtures; personal CVs are never committed.
@@ -67,6 +73,15 @@ dctwin-web
 
 Then open `http://127.0.0.1:8765`. The preview binds only to the local machine, processes uploads in a temporary file that is deleted after each request, and does not call Foundry.
 
+When the Foundry environment variables are set, the preview can create and update a local session Twin:
+
+- upload a PDF or DOCX CV;
+- paste CV-style text as the first or subsequent CV source;
+- add an achievement to a selected role;
+- inspect reconciliation decisions and stage timings.
+
+The session Twin is stored in ignored local development state under `.dctwin-local/`. This is not account persistence.
+
 ## Privacy
 
 CVs and generated personal artifacts belong under the ignored `private/` directory or outside the repository. The PDF and DOCX strategies remove email addresses, international-format phone numbers and common street-address forms before model invocation.
@@ -75,4 +90,4 @@ Email addresses are emitted separately as unverified account-enrollment candidat
 
 ## Azure status
 
-The local contracts, adapter boundary and deterministic provider are usable without Azure quota. The Foundry provider will be added after the EU Data Zone model deployment is available. The provider boundary keeps model and deployment selection configurable.
+The local contracts, adapter boundary, reconciliation boundary and deterministic tests are usable without Azure quota. The Foundry provider is available when a configured deployment is present. The provider boundary keeps model and deployment selection configurable.

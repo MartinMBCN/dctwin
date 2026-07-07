@@ -10,7 +10,7 @@
     "source_id": { "type": "string", "pattern": "^src_[a-zA-Z0-9_-]+$" },
     "source_type": {
       "type": "string",
-      "enum": ["cv", "linkedin_profile", "portfolio", "interview_transcript", "story", "user_correction", "other"]
+      "enum": ["cv", "linkedin_profile", "portfolio", "interview_transcript", "story", "user_entered_data", "user_correction", "other"]
     },
     "media_type": { "type": "string", "minLength": 1 },
     "content_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
