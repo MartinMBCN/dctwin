@@ -1,5 +1,5 @@
 Architecture DRAFT
-
+Technical view
                 Outputs
                     ▲
                     │
@@ -21,6 +21,27 @@ Architecture DRAFT
                     ▲
                     │
           CV  Interview  Story  ...
+
+Conceptual view
+Reality
+        │
+        ▼
+Evidence
+        │
+        ▼
+Digital Career Twin
+        ▲
+        │
+Preferences
+        │
+        ▼
+Reference Models
+        │
+        ▼
+Reasoning
+        │
+        ▼
+Visualizations / Displays
 
 Azure Architecture
 Browser
@@ -85,6 +106,25 @@ Gallery
  → public space.
 Displays
  → individual public views.
+
+The primary models
+Twin
+
+The user's evidence-based professional model.
+
+The Twin represents the best current understanding of the user's professional identity, constructed from accumulated evidence and refined over time. It exists in the present and is the canonical representation from which all interpretations are derived.
+
+Preferences
+
+The user's desired future.
+
+Preferences capture what the user wants rather than what the evidence currently supports. They describe aspirations, objectives, constraints, motivators, and trade-offs, and provide direction for interpreting the Twin.
+
+Reference Models
+
+External models of the professional world.
+
+Reference Models describe the capabilities, expectations, structures, and patterns that exist outside the Twin. They are acquired as needed from trusted external sources and provide the context against which the Twin can be interpreted.
 
 Data acquisition architecture
 Each layer answers a different question.
