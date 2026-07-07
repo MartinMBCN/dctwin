@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from dctwin import web
@@ -21,3 +22,10 @@ def test_reset_session_clears_session_and_cache(
     web._reset_session()
 
     assert not state_dir.exists()
+
+
+def test_health_payload_exposes_semver_app_version() -> None:
+    payload = web._health_payload()
+
+    assert payload["status"] == "ok"
+    assert re.match(r"^\d+\.\d+\.\d+$", payload["app_version"])

@@ -61,4 +61,4 @@ Responsibilities:
 4. Apply the corresponding action: `ADD`, `MERGE_PROVENANCE` or append with possible-duplicate context.
 5. Refresh the local session Twin and validate the complete result.
 
-The product UI does not use the internal term "evidence" for manual user entry. Users add an achievement; internally that achievement becomes user-entered evidence after classification, tagging, reconciliation and validation.
+The product UI does not use the internal term "evidence" for manual user entry. Users add achievements; internally each line becomes user-entered evidence after classification, tagging, reconciliation and validation. The batch still applies to one selected role. If the user wants to enter material spanning multiple roles, they should use the CV paste flow.

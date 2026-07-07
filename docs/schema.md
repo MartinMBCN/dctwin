@@ -16,7 +16,7 @@ A Twin records the sources that support it, but not the source document's full c
 
 Source type and file format are intentionally separate. `cv` is a source type; PDF, DOCX and pasted text are currently registered or supported format paths. Adding another CV format must not change the normalized contract or downstream agent.
 
-User-entered achievements are represented as source type `user_entered_data`. The UI should describe this as adding an achievement; the internal schema treats the achievement as evidence only after it has been classified, tagged, reconciled and validated.
+User-entered achievements are represented as source type `user_entered_data`. The UI should describe this as adding achievements. Each non-empty line becomes a separate evidence item attached to the selected role; the internal schema treats those achievements as evidence only after classification, tagging, reconciliation and validation.
 
 Account enrollment is a separate concern. `schemas/enrollment_candidates.schema.json` describes private, unverified contact candidates extracted alongside the model document. It is not part of the DCT schema and must never be included in an agent prompt. After verification, the account system owns the contact identifier and links to the Twin by an opaque owner ID.
 

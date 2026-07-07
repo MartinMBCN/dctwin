@@ -114,7 +114,7 @@
         <h1>Local adaptation lab</h1>
         <div class="intro">Build and update a session Twin from uploaded CVs, pasted CV text, and achievements you add yourself. This is local development storage, not user-account persistence.</div>
       </div>
-      <div class="local-badge"><span class="pulse"></span> Local session Twin</div>
+      <div class="local-badge"><span class="pulse"></span> Local session Twin <span id="app-version"></span></div>
     </header>
 
     <section class="pipeline" aria-label="Pipeline status">
@@ -129,14 +129,14 @@
         <div class="card-head">
           <div>
             <h2>Add source material</h2>
-            <div class="subtle">CV file · pasted CV · added achievement</div>
+            <div class="subtle">CV file · pasted CV · added achievements</div>
           </div>
           <button class="button secondary" id="reset-button">Reset session &amp; cache</button>
         </div>
         <nav class="input-tabs" aria-label="Input methods">
           <button class="input-tab active" data-input-tab="upload">Upload a file</button>
           <button class="input-tab" data-input-tab="text">Paste CV</button>
-          <button class="input-tab" data-input-tab="evidence">Add an achievement</button>
+          <button class="input-tab" data-input-tab="evidence">Add achievements</button>
         </nav>
 
         <section class="pane active" data-pane="upload">
@@ -161,15 +161,15 @@
 
         <section class="pane" data-pane="evidence">
           <div class="field">
-            <label for="role-select">Role this achievement relates to</label>
+            <label for="role-select">Role these achievements relate to</label>
             <select id="role-select"><option value="">Create or load a Twin first</option></select>
           </div>
           <div class="field">
-            <label for="evidence-text">Achievement</label>
-            <textarea id="evidence-text" placeholder="Example: Reduced deployment lead time by 35% by standardising release workflows."></textarea>
+            <label for="evidence-text">Achievements</label>
+            <textarea id="evidence-text" placeholder="Add one achievement per line.&#10;Example: Reduced deployment lead time by 35% by standardising release workflows.&#10;Example: Improved release reliability by introducing automated checks."></textarea>
           </div>
-          <button class="button" id="submit-evidence">Add achievement to Twin</button>
-          <div class="privacy-note"><span>◇</span><div>This creates a user-entered source. Internally it is classified, tagged, reconciled, and validated before it changes the Twin.</div></div>
+          <button class="button" id="submit-evidence">Add achievements to Twin</button>
+          <div class="privacy-note"><span>◇</span><div>Add as many achievements as you like, one per line. They all attach to the selected role. If the text spans multiple roles, use Paste CV instead.</div></div>
         </section>
 
         <div class="summary" id="summary">
@@ -198,14 +198,28 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script>
-    const busyStages = [
+    const firstCvBusyStages = [
       { at: 0, title: 'Uploading your CV' },
       { at: 1200, title: 'Extracting roles and achievements' },
       { at: 7000, title: 'Identifying your skills and recurring career themes' },
       { at: 16000, title: 'Constructing your digital twin' },
       { at: 26000, title: 'Rendering your digital twin for presentation' }
     ];
-    const state = { tab: 'mirror', result: null, roles: [], busyTimer: null, busyStarted: 0 };
+    const updateCvBusyStages = [
+      { at: 0, title: 'Uploading your CV' },
+      { at: 1200, title: 'Extracting additional roles and achievements' },
+      { at: 7000, title: 'Updating your skills and recurring career themes' },
+      { at: 16000, title: 'Re-constructing your digital twin' },
+      { at: 26000, title: 'Rendering your digital twin for presentation' }
+    ];
+    const achievementBusyStages = [
+      { at: 0, title: 'Adding your achievements' },
+      { at: 1200, title: 'Checking where it fits' },
+      { at: 7000, title: 'Updating your skills and recurring career themes' },
+      { at: 16000, title: 'Re-constructing your digital twin' },
+      { at: 26000, title: 'Rendering your digital twin for presentation' }
+    ];
+    const state = { tab: 'mirror', result: null, roles: [], busyTimer: null, busyStarted: 0, busyStages: firstCvBusyStages };
     const input = document.querySelector('#file-input');
     const dropZone = document.querySelector('#drop-zone');
     const viewer = document.querySelector('#viewer');
@@ -239,6 +253,7 @@
       } else {
         stage.querySelector('strong').textContent = 'Foundry agent unavailable';
       }
+      document.querySelector('#app-version').textContent = health.app_version ? `v${health.app_version}` : '';
     });
     loadState();
 
@@ -257,7 +272,7 @@
     async function adaptFile(file) {
       const extension = file.name.split('.').pop().toLowerCase();
       if (!['pdf', 'docx'].includes(extension)) return notify('Choose a PDF or DOCX file');
-      setBusy(`Adapting ${file.name}…`);
+      setBusy(`Adapting ${file.name}…`, cvBusyStages());
       try {
         const response = await fetch('/api/adapt', {
           method: 'POST',
@@ -273,7 +288,7 @@
     async function adaptText() {
       const text = document.querySelector('#cv-text').value.trim();
       if (!text) return notify('Paste CV text first');
-      setBusy('Adapting pasted CV text…');
+      setBusy('Adapting pasted CV text…', cvBusyStages());
       try {
         const response = await fetch('/api/adapt-text', {
           method: 'POST',
@@ -290,15 +305,15 @@
       const roleId = document.querySelector('#role-select').value;
       const text = document.querySelector('#evidence-text').value.trim();
       if (!roleId) return notify('Choose a role first');
-      if (!text) return notify('Enter an achievement first');
-      setBusy('Adding achievement to the session Twin…');
+      if (!text) return notify('Enter at least one achievement first');
+      setBusy('Adding achievements to the session Twin…', achievementBusyStages);
       try {
         const response = await fetch('/api/manual-evidence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-DCTWIN-Local': '1' },
           body: JSON.stringify({ role_id: roleId, text })
         });
-        await acceptResponse(response, 'added achievement');
+        await acceptResponse(response, 'added achievements');
         document.querySelector('#evidence-text').value = '';
       } catch (error) {
         showError(error);
@@ -352,19 +367,24 @@
       select.innerHTML = state.roles.map(role => `<option value="${escapeAttr(role.id)}">${escapeHtml(role.title)} · ${escapeHtml(role.organization)}</option>`).join('');
     }
 
-    function setBusy(message) {
-      startBusySequence(message);
+    function cvBusyStages() {
+      return state.result ? updateCvBusyStages : firstCvBusyStages;
+    }
+
+    function setBusy(message, stages = firstCvBusyStages) {
+      startBusySequence(message, stages);
       document.querySelector('#stage-source').classList.add('active');
     }
 
-    function startBusySequence(message) {
+    function startBusySequence(message, stages) {
       stopBusySequence();
       state.busyStarted = Date.now();
+      state.busyStages = stages;
       document.querySelector('#result-subtitle').textContent = message;
       renderBusyStage(0, message);
       state.busyTimer = setInterval(() => {
         const elapsed = Date.now() - state.busyStarted;
-        const index = busyStages.reduce((current, stage, candidateIndex) => elapsed >= stage.at ? candidateIndex : current, 0);
+        const index = state.busyStages.reduce((current, stage, candidateIndex) => elapsed >= stage.at ? candidateIndex : current, 0);
         renderBusyStage(index, message);
       }, 500);
     }
@@ -376,10 +396,11 @@
 
     function renderBusyStage(activeIndex, message) {
       const elapsed = Date.now() - state.busyStarted;
-      const visibleStages = busyStages.slice(0, activeIndex + 1);
+      const stages = state.busyStages || firstCvBusyStages;
+      const visibleStages = stages.slice(0, activeIndex + 1);
       const rows = visibleStages.map((stage, index) => {
         const status = index < activeIndex ? 'complete' : index === activeIndex ? 'active' : '';
-        const completedAt = index < busyStages.length - 1 ? busyStages[index + 1].at : elapsed;
+        const completedAt = index < stages.length - 1 ? stages[index + 1].at : elapsed;
         const duration = index < activeIndex ? Math.max(0, completedAt - stage.at) : null;
         const time = duration === null ? '' : `<span class="stage-time">${escapeHtml(formatSeconds(duration))} processing</span>`;
         return `<div class="stage-row ${status}"><span class="stage-dot"></span><div><strong>${escapeHtml(stage.title)}</strong></div>${time}</div>`;
@@ -406,7 +427,7 @@
       } else if (state.tab === 'reconciliation') {
         const rec = state.result.reconciliation;
         if (!rec) {
-          viewer.innerHTML = '<div class="empty"><div class="empty-inner"><strong>No reconciliation event yet</strong>Add another source or achievement to see merge decisions.</div></div>';
+          viewer.innerHTML = '<div class="empty"><div class="empty-inner"><strong>No reconciliation event yet</strong>Add another source or achievements to see merge decisions.</div></div>';
           return;
         }
         const metrics = ['roles_detected', 'evidence_extracted', 'evidence_matched', 'evidence_added', 'evidence_merged', 'possible_duplicates'];
@@ -426,7 +447,7 @@
         const roles = (twin.roles || []).map(role => renderRoleWithAchievements(role, evidenceByRole.get(role.id) || [], showSourceQuotes)).join('');
         const patterns = (twin.reflection.strongly_supported || []).map(item => `<div class="block"><div class="block-text">${escapeHtml(item)}</div></div>`).join('');
         const questions = (twin.reflection.suggested_questions || []).map(item => `<div class="status-card"><strong>Question</strong>${escapeHtml(item)}</div>`).join('');
-        viewer.innerHTML = `<section style="margin-bottom:24px"><div class="eyebrow">Reflection</div><h2 style="font-family:Georgia,serif;font-weight:500;font-size:27px;margin:7px 0 10px">${escapeHtml(twin.reflection.summary)}</h2></section><section><div class="eyebrow" style="margin-bottom:10px">Current hypotheses</div>${inferenceCards || '<p class="subtle">No cross-evidence inferences yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Recurring patterns</div>${patterns || '<p class="subtle">No recurring patterns yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Questions to resolve</div>${questions || '<p class="subtle">No open questions yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Career timeline</div>${roles}</section>`;
+        viewer.innerHTML = `<section style="margin-bottom:24px"><div class="eyebrow">Reflection</div><h2 style="font-family:Georgia,serif;font-weight:500;font-size:27px;margin:7px 0 10px">${escapeHtml(twin.reflection.summary)}</h2></section><section><div class="eyebrow" style="margin-bottom:10px">Current hypotheses</div>${inferenceCards || '<p class="subtle">No cross-evidence inferences yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Recurring career themes</div>${patterns || '<p class="subtle">No recurring career themes yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Questions to resolve</div>${questions || '<p class="subtle">No open questions yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Career timeline</div>${roles}</section>`;
       }
     }
 

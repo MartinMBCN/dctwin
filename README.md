@@ -7,7 +7,7 @@ This repository is currently implementing Sprint 3: update a local session Twin 
 ## Current vertical slice
 
 ```text
-CV source or user-entered achievement
+CV source or user-entered achievements
   → Source Adapter registry
       → PDF CV strategy
       → DOCX CV strategy
@@ -82,8 +82,9 @@ When the Foundry environment variables are set, the preview can create and updat
 
 - upload a PDF or DOCX CV;
 - paste CV-style text as the first or subsequent CV source;
-- add an achievement to a selected role;
+- add achievements to a selected role, one per line;
 - inspect reconciliation decisions and stage timings.
+- check `/api/health` or the local UI badge for the running app semver.
 
 The session Twin is stored in ignored local development state under `.dctwin-local/`. This is not account persistence.
 

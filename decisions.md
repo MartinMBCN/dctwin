@@ -103,12 +103,20 @@ Reason:
 CV ingestion involves unavoidable latency while text is extracted, evidence is interpreted, the Twin is constructed and results are rendered. A blank wait creates uncertainty and reduces trust. A staged progress experience helps the user understand that useful work is happening and makes the wait feel shorter, especially while production latency is being optimized.
 
 Consequence:
-The local UI reveals ingestion stages only as they become active and shows elapsed processing time beside completed stages. The user-facing stages are:
+The local UI reveals ingestion stages only as they become active and shows elapsed processing time beside completed stages. First-time CV creation uses:
 
 - Uploading your CV
 - Extracting roles and achievements
 - Identifying your skills and recurring career themes
 - Constructing your digital twin
+- Rendering your digital twin for presentation
+
+Subsequent CV uploads use update language:
+
+- Uploading your CV
+- Extracting additional roles and achievements
+- Updating your skills and recurring career themes
+- Re-constructing your digital twin
 - Rendering your digital twin for presentation
 
 This is deliberately aligned with the architecture: the UI should expose meaningful system progress without exposing internal jargon such as schema validation, transient contracts or orchestration details. Developer-facing timing and reconciliation logs may remain available for tuning.

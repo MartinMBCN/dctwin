@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import unquote
 from zoneinfo import ZoneInfo
 
+from dctwin import __version__
 from dctwin.adapters import AdapterRegistry, DocxCvAdapter, PdfCvAdapter, adapt_cv_text
 from dctwin.agent import SourceAdapterAgent
 from dctwin.foundry import FoundryExtractionTwinProvider, FoundryTwinProvider
@@ -41,6 +42,17 @@ def _foundry_configured() -> bool:
         os.environ.get("FOUNDRY_PROJECT_ENDPOINT")
         and os.environ.get("DCTWIN_MODEL_DEPLOYMENT")
     )
+
+
+def _health_payload() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "app_version": __version__,
+        "mode": "local",
+        "formats": ["pdf", "docx", "pasted_text"],
+        "foundry": "ready" if _foundry_configured() else "not_configured",
+        "model_path": os.environ.get("DCTWIN_MODEL_PATH", "staged_extraction"),
+    }
 
 
 def _contracts() -> dict[str, dict[str, Any]]:
@@ -151,16 +163,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                 "text/html; charset=utf-8",
             )
         elif self.path == "/api/health":
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "status": "ok",
-                    "mode": "local",
-                    "formats": ["pdf", "docx", "pasted_text"],
-                    "foundry": "ready" if _foundry_configured() else "not_configured",
-                    "model_path": os.environ.get("DCTWIN_MODEL_PATH", "staged_extraction"),
-                },
-            )
+            self._send_json(HTTPStatus.OK, _health_payload())
         elif self.path == "/api/state":
             session = _load_session()
             twin = session.get("twin")
@@ -289,8 +292,8 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             session = _load_session()
             if not session.get("twin"):
                 self._send_json(
-                HTTPStatus.BAD_REQUEST,
-                {"error": "Create or load a Twin before adding an achievement"},
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "Create or load a Twin before adding achievements"},
                 )
                 return
             _timing_mark(timings, "upload_received", started)
@@ -329,16 +332,16 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                         "candidates": [],
                     },
                     twin=updated,
-                    filename="Added achievement",
+                    filename="Added achievements",
                     reconciliation=reconciliation.as_dict(),
                     timings=timings,
-                    message="The achievement was added to the session Twin and validated.",
+                    message="The achievements were added to the session Twin and validated.",
                 ),
             )
         except Exception as exc:
             self._send_json(
                 HTTPStatus.UNPROCESSABLE_ENTITY,
-                {"error": f"The achievement could not be added: {exc}"},
+                {"error": f"The achievements could not be added: {exc}"},
             )
 
     def _run_source_adapter_and_reconcile(

@@ -165,48 +165,49 @@ class ReconciliationAgent:
 
         updated = deepcopy(twin)
         source_doc = self._manual_source_document(text)
-        evidence_text = source_doc["blocks"][0]["text"]
         source = {
             "id": source_doc["source_id"],
             "type": "user_entered_data",
-            "label": source_doc["blocks"][0]["text"][:80] or "User entered evidence",
+            "label": _manual_source_label(source_doc),
             "adapter": "manual_evidence@0.1.0",
             "content_hash": source_doc["content_hash"],
         }
         if source["id"] not in {item.get("id") for item in updated.get("sources", [])}:
             updated.setdefault("sources", []).append(source)
 
-        evidence = {
-            "id": self._unique_id(
-                "ev",
-                evidence_text,
-                {item.get("id") for item in updated.get("evidence_items", [])},
-            ),
-            "type": classify_evidence(evidence_text),
-            "text": evidence_text,
-            "role_id": role_id,
-            "context": "Manually entered by user.",
-            "source_refs": [
-                {
-                    "source_id": source_doc["source_id"],
-                    "block_id": "block_manual_1",
-                    "quote": evidence_text,
-                }
-            ],
-            "tag_assignments": tag_assignments(evidence_text, tag_catalog),
+        actions: list[dict[str, Any]] = []
+        counts = {
+            "evidence_matched": 0,
+            "evidence_added": 0,
+            "evidence_merged": 0,
+            "possible_duplicates": 0,
         }
-        match = self._best_evidence_match(updated, evidence)
-        actions: list[dict[str, Any]]
-        if match and match[1] >= self.exact_threshold:
-            target, score = match
-            self._merge_source_refs(target, evidence)
-            self._merge_tag_assignments(target, evidence)
-            summary = ReconciliationSummary(
-                roles_detected=0,
-                evidence_extracted=1,
-                evidence_matched=1,
-                evidence_merged=1,
-                actions=[
+        existing_ids = {item.get("id") for item in updated.get("evidence_items", [])}
+        for block in source_doc["blocks"]:
+            evidence_text = block["text"]
+            evidence = {
+                "id": self._unique_id("ev", evidence_text, existing_ids),
+                "type": classify_evidence(evidence_text),
+                "text": evidence_text,
+                "role_id": role_id,
+                "context": "Manually entered by user.",
+                "source_refs": [
+                    {
+                        "source_id": source_doc["source_id"],
+                        "block_id": block["id"],
+                        "quote": evidence_text,
+                    }
+                ],
+                "tag_assignments": tag_assignments(evidence_text, tag_catalog),
+            }
+            match = self._best_evidence_match(updated, evidence)
+            if match and match[1] >= self.exact_threshold:
+                target, score = match
+                self._merge_source_refs(target, evidence)
+                self._merge_tag_assignments(target, evidence)
+                counts["evidence_matched"] += 1
+                counts["evidence_merged"] += 1
+                actions.append(
                     {
                         "classification": "DUPLICATE",
                         "action": "MERGE_PROVENANCE",
@@ -214,16 +215,17 @@ class ReconciliationAgent:
                         "target_id": target.get("id"),
                         "score": round(score, 3),
                     }
-                ],
-            )
-        else:
+                )
+                continue
+
             if match:
                 evidence["context"] = (
                     f"Possible duplicate of {match[0].get('id')}. "
                     "Manually entered by user."
                 )
-                possible_duplicates = 1
-                actions = [
+                counts["evidence_matched"] += 1
+                counts["possible_duplicates"] += 1
+                actions.append(
                     {
                         "classification": "POSSIBLE_DUPLICATE",
                         "action": "ADD_WITH_POSSIBLE_DUPLICATE_CONTEXT",
@@ -232,25 +234,28 @@ class ReconciliationAgent:
                         "appended_id": evidence["id"],
                         "score": round(match[1], 3),
                     }
-                ]
+                )
             else:
-                possible_duplicates = 0
-                actions = [
+                actions.append(
                     {
                         "classification": "NEW",
                         "action": "ADD",
                         "entity": "manual_evidence",
                         "appended_id": evidence["id"],
                     }
-                ]
+                )
             updated.setdefault("evidence_items", []).append(evidence)
-            summary = ReconciliationSummary(
-                evidence_extracted=1,
-                evidence_matched=1 if match else 0,
-                evidence_added=1,
-                possible_duplicates=possible_duplicates,
-                actions=actions,
-            )
+            existing_ids.add(evidence["id"])
+            counts["evidence_added"] += 1
+
+        summary = ReconciliationSummary(
+            evidence_extracted=len(source_doc["blocks"]),
+            evidence_matched=counts["evidence_matched"],
+            evidence_added=counts["evidence_added"],
+            evidence_merged=counts["evidence_merged"],
+            possible_duplicates=counts["possible_duplicates"],
+            actions=actions,
+        )
 
         self._refresh_reflection(updated)
         updated["generated_at"] = datetime.now(UTC).isoformat()
@@ -504,7 +509,21 @@ class ReconciliationAgent:
     @staticmethod
     def _manual_source_document(text: str) -> dict[str, Any]:
         digest = hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
-        minimized, redactions = minimize_direct_identifiers(text.strip(), counters={})
+        counters: dict[str, int] = {}
+        blocks = []
+        for index, line in enumerate(_manual_achievement_lines(text), start=1):
+            minimized, redactions = minimize_direct_identifiers(line, counters=counters)
+            blocks.append(
+                {
+                    "id": f"block_manual_{index}",
+                    "locator": {"kind": "record", "value": f"manual-entry:{index}"},
+                    "text": minimized,
+                    "redactions": [
+                        {"category": item.category, "placeholder": item.placeholder}
+                        for item in redactions
+                    ],
+                }
+            )
         return {
             "schema_version": "0.1.0",
             "source_id": f"src_{digest[:16]}",
@@ -518,17 +537,7 @@ class ReconciliationAgent:
                 "direct_identifiers_minimized": True,
                 "enrollment_candidates_separated": True,
             },
-            "blocks": [
-                {
-                    "id": "block_manual_1",
-                    "locator": {"kind": "record", "value": "manual-entry:1"},
-                    "text": minimized,
-                    "redactions": [
-                        {"category": item.category, "placeholder": item.placeholder}
-                        for item in redactions
-                    ],
-                }
-            ],
+            "blocks": blocks,
         }
 
     @staticmethod
@@ -725,3 +734,14 @@ def _preferred_short_text(existing: str, incoming: str) -> str:
     if len(incoming_tokens) >= len(existing_tokens) + 2:
         return incoming
     return existing
+
+
+def _manual_achievement_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _manual_source_label(source_doc: dict[str, Any]) -> str:
+    blocks = source_doc.get("blocks", [])
+    if len(blocks) == 1:
+        return blocks[0].get("text", "")[:80] or "User entered achievement"
+    return f"{len(blocks)} user entered achievements"

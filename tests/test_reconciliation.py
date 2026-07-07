@@ -58,6 +58,33 @@ def test_manual_achievement_updates_twin_with_user_entered_source() -> None:
     validate_twin(updated, schema, catalog, source_documents=[source_doc])
 
 
+def test_manual_achievements_split_non_empty_lines_for_one_role() -> None:
+    twin = load_json(ROOT / "tests/fixtures/valid_twin.json")
+    catalog = load_json(ROOT / "catalogs/tag_catalog.json")
+    source_schema = load_json(ROOT / "schemas/source_document.schema.json")
+
+    updated, source_doc, summary = ReconciliationAgent().add_manual_evidence(
+        twin=twin,
+        role_id="role_acme_platform_lead",
+        text=(
+            "Reduced incident response time by 25% with clearer escalation paths.\n\n"
+            "Improved onboarding by creating a reusable engineering playbook."
+        ),
+        tag_catalog=catalog,
+    )
+
+    added = updated["evidence_items"][-2:]
+    assert summary.evidence_extracted == 2
+    assert summary.evidence_added == 2
+    assert len(source_doc["blocks"]) == 2
+    assert {item["role_id"] for item in added} == {"role_acme_platform_lead"}
+    assert {ref["block_id"] for item in added for ref in item["source_refs"]} == {
+        "block_manual_1",
+        "block_manual_2",
+    }
+    validate_source_document(source_doc, source_schema)
+
+
 def test_reconciliation_merges_rephrased_evidence_with_shared_metric_and_entities() -> None:
     existing = _twin_with_evidence(
         "Identified supplier-driven cost anomaly and avoided up to $900K in non-value spend."
