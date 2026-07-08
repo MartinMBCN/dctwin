@@ -539,15 +539,16 @@
         return;
       }
       const knownAccount = localStorage.getItem(KNOWN_ACCOUNT_KEY) === '1';
+      const signingIn = knownAccount && !state.result;
       setAccountHeading(
-        knownAccount ? 'Sign in to your Digital Career Twin' : 'Save your Digital Career Twin',
-        knownAccount ? 'Enter your email to receive a one-time verification code.' : 'Create an account with a verified email address.'
+        signingIn ? 'Sign in to your Digital Career Twin' : 'Save your Digital Career Twin',
+        signingIn ? 'Enter your email to receive a one-time verification code.' : 'Create an account with a verified email address.'
       );
       const options = state.authCandidates.map(email => `<option value="${escapeAttr(email)}">${escapeHtml(email)}</option>`).join('');
-      const candidateSelect = !knownAccount && state.authCandidates.length
+      const candidateSelect = !signingIn && state.authCandidates.length
         ? `<div class="field"><label for="auth-email-select">Email detected in your sources</label><select id="auth-email-select"><option value="">Choose detected email…</option>${options}</select></div>`
         : '';
-      accountBody.innerHTML = `${candidateSelect}<div class="field"><label for="auth-email">Email address</label><input id="auth-email" type="text" value="${escapeAttr(state.authEmail)}" placeholder="you@example.com"></div><div class="auth-row"><div class="field"><label for="auth-duration">Log me out</label><select id="auth-duration"><option value="midnight">At midnight</option><option value="7_days" selected>In 7 days</option><option value="1_month">In 1 month</option></select></div><div class="field"><label for="auth-timezone">Timezone</label><input id="auth-timezone" type="text" value="${escapeAttr(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')}"></div></div><div class="account-actions"><button class="button" onclick="requestCode()">${knownAccount ? 'Send sign-in code' : 'Send verification code'}</button><button class="button secondary" onclick="closeAccountModal()">Cancel</button></div>`;
+      accountBody.innerHTML = `${candidateSelect}<div class="field"><label for="auth-email">Email address</label><input id="auth-email" type="text" value="${escapeAttr(state.authEmail)}" placeholder="you@example.com"></div><div class="auth-row"><div class="field"><label for="auth-duration">Log me out</label><select id="auth-duration"><option value="midnight">At midnight</option><option value="7_days" selected>In 7 days</option><option value="1_month">In 1 month</option></select></div><div class="field"><label for="auth-timezone">Timezone</label><input id="auth-timezone" type="text" value="${escapeAttr(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')}"></div></div><div class="account-actions"><button class="button" onclick="requestCode()">${signingIn ? 'Send sign-in code' : 'Send verification code'}</button><button class="button secondary" onclick="closeAccountModal()">Cancel</button></div>`;
       const select = document.querySelector('#auth-email-select');
       if (select) select.addEventListener('change', () => { if (select.value) document.querySelector('#auth-email').value = select.value; });
     }
@@ -635,7 +636,7 @@
       document.querySelector('#result-subtitle').textContent = 'Signed out';
       viewer.innerHTML = '<div class="empty"><div class="empty-inner"><strong>You are signed out</strong>Your session Twin and local source cache were cleared from this browser. Sign in to reload your saved Digital Career Twin.</div></div>';
       updateAccountChrome();
-      renderAccountModal();
+      closeAccountModal();
       notify('Logged out');
     }
 
