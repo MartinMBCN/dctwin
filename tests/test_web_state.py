@@ -193,6 +193,61 @@ def test_sign_in_requires_existing_saved_twin(
         )
 
 
+def test_sign_in_reports_missing_deleted_account(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    monkeypatch.setenv("DCTWIN_STATE_DIR", str(tmp_path / "persistent_state"))
+
+    with pytest.raises(ValueError, match="No account found"):
+        web._request_code_payload(
+            email="deleted@example.com",
+            ip_address="127.0.0.1",
+            purpose="sign_in",
+        )
+
+
+def test_deleted_account_email_can_be_reused(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    monkeypatch.setenv("DCTWIN_STATE_DIR", str(tmp_path / "persistent_state"))
+    session_id = _sign_in_and_save_twin(monkeypatch, tmp_path, twin_id="twin_deleted")
+    status, payload = web._delete_account_payload(
+        session_id=session_id,
+        confirmation=(
+            "Are you sure? Your digital twin will be deleted and cannot be recovered. "
+            "You will have to rebuild the Twin if you come back later."
+        ),
+    )
+    assert status == HTTPStatus.OK
+
+    web._save_session(
+        {
+            "twin": {"schema_version": "0.2.0", "twin_id": "twin_recreated"},
+            "source_documents": [],
+            "enrollment_documents": [],
+        }
+    )
+    delivery = web._request_code_payload(
+        email="user@example.com",
+        ip_address="127.0.0.1",
+    )
+    status, payload = web._verify_code_payload(
+        email="user@example.com",
+        code=delivery["simulated_code"],
+        duration="7_days",
+        timezone="Europe/Madrid",
+    )
+
+    assert status == HTTPStatus.OK
+    assert payload["authenticated"] is True
+    assert payload["has_persistent_twin"] is True
+    assert load_json(_account_file(tmp_path))["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_recreated"
+
+
 def test_sign_in_loads_existing_saved_twin(
     monkeypatch,
     tmp_path: Path,

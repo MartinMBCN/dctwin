@@ -2,6 +2,13 @@
 
 Terse user-facing and acceptance-testing notes for each app increment. The app version is exposed at `/api/health` as `app_version`.
 
+## 0.2.10 — Account deletion wording and reuse
+
+- Renamed signed-in destructive action from `Delete my DCT` to `Delete my account`.
+- Kept the destructive action out of the immediate account-creation success state.
+- Sign-in after account deletion now reports `No account found for this email`.
+- Confirmed deleted account emails can be reused for a new account and Persistent Twin.
+
 ## 0.2.9 — Stable local account store
 
 - Moved local account and Persistent Twin storage out of the repository working tree.

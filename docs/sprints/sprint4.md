@@ -134,7 +134,7 @@ Started locally:
   - sign-in requires an existing saved Persistent Twin;
   - signed-in CV uploads, pasted CVs and added achievements immediately save the updated Session Twin back to the user's Persistent Twin;
   - the account dialog displays account creation date, last login, login count, last DCT change and current session expiry;
-  - account deletion is available from the signed-in account dialog as "Delete my DCT";
+  - account deletion is available from the signed-in account dialog;
   - regression coverage confirms Persistent Twins survive app version changes.
 - Added Sprint 4 persistence hardening through `0.2.9`:
   - Persistent Twin/account JSON is stored in a stable local state directory rather than the repository working tree;
@@ -142,6 +142,11 @@ Started locally:
   - default local account path is `~/.dctwin/accounts.json`;
   - Session Twin and source cache remain repository-local and disposable;
   - regression coverage confirms account storage survives checkout/project-root changes.
+- Added Sprint 4 deletion hardening through `0.2.10`:
+  - the destructive action is labelled "Delete my account" because accounts do not exist independently of a Persistent Twin;
+  - the delete action is hidden from the immediate account-creation success state and shown from account management;
+  - sign-in after deletion reports "No account found for this email";
+  - deleted account emails can be reused for a new account and Persistent Twin.
 
 Agreed UX copy:
 

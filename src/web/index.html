@@ -497,7 +497,7 @@
       accountModal.classList.add('show');
       state.pendingCode = null;
       state.mergeDecision = null;
-      state.accountMode = state.auth.authenticated ? 'signed_in' : 'start';
+      state.accountMode = state.auth.authenticated ? 'account_management' : 'start';
       await refreshAuthCandidates();
       renderAccountModal();
     }
@@ -519,12 +519,13 @@
         const metadata = `<div class="subtle" style="margin-top:10px">Account created: ${escapeHtml(formatDateTime(account.created_at))}</div><div class="subtle">Last login: ${escapeHtml(formatDateTime(account.last_login_at))}</div><div class="subtle">Logins: ${escapeHtml(account.login_count ?? '—')}</div><div class="subtle">Last DCT change: ${escapeHtml(formatDateTime(account.last_twin_saved_at || state.auth.persistent_twin_saved_at))}</div>`;
         if (!state.auth.has_persistent_twin) {
           setAccountHeading('No saved Twin found', 'This account exists, but it does not yet have a saved Digital Career Twin.');
-          accountBody.innerHTML = `<div class="status-card"><strong>Signed in as ${escapeHtml(state.auth.user.email)}</strong>Your session expires ${escapeHtml(expires)}.${metadata}<div class="subtle" style="margin-top:6px">Upload a CV or paste CV text to create and save a Twin for this account.</div></div><div class="account-actions"><button class="button secondary" onclick="logout()">Log out</button><button class="button" onclick="closeAccountModal()">Continue</button><button class="button danger" onclick="confirmDeleteAccount()">Delete my DCT</button></div>`;
+          accountBody.innerHTML = `<div class="status-card"><strong>Signed in as ${escapeHtml(state.auth.user.email)}</strong>Your session expires ${escapeHtml(expires)}.${metadata}<div class="subtle" style="margin-top:6px">Upload a CV or paste CV text to create and save a Twin for this account.</div></div><div class="account-actions"><button class="button secondary" onclick="logout()">Log out</button><button class="button" onclick="closeAccountModal()">Continue</button><button class="button danger" onclick="confirmDeleteAccount()">Delete my account</button></div>`;
           return;
         }
         setAccountHeading('Your Digital Career Twin is saved', 'You are signed in and this Twin can be reloaded later.');
         const savedAt = state.auth.persistent_twin_saved_at ? `<div class="subtle" style="margin-top:6px">Last saved ${escapeHtml(formatDateTime(state.auth.persistent_twin_saved_at))}.</div>` : '';
-        accountBody.innerHTML = `<div class="status-card"><strong>Signed in as ${escapeHtml(state.auth.user.email)}</strong>Your session expires ${escapeHtml(expires)}.${savedAt}${metadata}</div><div class="account-actions"><button class="button secondary" onclick="logout()">Log out</button><button class="button" onclick="closeAccountModal()">Continue</button><button class="button danger" onclick="confirmDeleteAccount()">Delete my DCT</button></div>`;
+        const deleteAction = state.accountMode === 'account_management' ? '<button class="button danger" onclick="confirmDeleteAccount()">Delete my account</button>' : '';
+        accountBody.innerHTML = `<div class="status-card"><strong>Signed in as ${escapeHtml(state.auth.user.email)}</strong>Your session expires ${escapeHtml(expires)}.${savedAt}${metadata}</div><div class="account-actions"><button class="button secondary" onclick="logout()">Log out</button><button class="button" onclick="closeAccountModal()">Continue</button>${deleteAction}</div>`;
         return;
       }
       if (state.mergeDecision) {
@@ -601,7 +602,7 @@
       const verifiedFlow = state.pendingCode.flow;
       acceptAuthPayload(payload);
       state.pendingCode = null;
-      state.accountMode = 'signed_in';
+      state.accountMode = verifiedFlow === 'sign_in' ? 'account_management' : 'account_created';
       await loadState();
       if (verifiedFlow === 'sign_in' && payload.has_persistent_twin) {
         closeAccountModal();

@@ -151,7 +151,9 @@ def _request_code_payload(
     normalized_email = normalize_email(email)
     if purpose == "sign_in":
         user = repo.get_user_by_email(email=normalized_email)
-        persistent = repo.load_persistent_twin(user_id=user["id"]) if user else None
+        if user is None:
+            raise ValueError("No account found for this email")
+        persistent = repo.load_persistent_twin(user_id=user["id"])
         if persistent is None:
             raise ValueError("No saved Digital Career Twin was found for this email")
     elif purpose == "create_account":
