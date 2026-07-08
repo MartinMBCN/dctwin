@@ -248,6 +248,29 @@ def test_deleted_account_email_can_be_reused(
     assert load_json(_account_file(tmp_path))["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_recreated"
 
 
+def test_create_account_with_existing_email_guides_user_to_login(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    monkeypatch.setenv("DCTWIN_STATE_DIR", str(tmp_path / "persistent_state"))
+    _sign_in_and_save_twin(monkeypatch, tmp_path, twin_id="twin_saved")
+    web._save_session(
+        {
+            "twin": {"schema_version": "0.2.0", "twin_id": "twin_new_session"},
+            "source_documents": [],
+            "enrollment_documents": [],
+        }
+    )
+
+    with pytest.raises(ValueError, match="already exists.*logging in"):
+        web._request_code_payload(
+            email="user@example.com",
+            ip_address="127.0.0.1",
+            purpose="create_account",
+        )
+
+
 def test_sign_in_loads_existing_saved_twin(
     monkeypatch,
     tmp_path: Path,
@@ -346,6 +369,7 @@ def test_verify_code_requires_merge_decision_for_existing_persistent_twin(
     delivery = web._request_code_payload(
         email="user@example.com",
         ip_address="127.0.0.1",
+        purpose="sign_in",
     )
 
     status, payload = web._verify_code_payload(
@@ -353,6 +377,7 @@ def test_verify_code_requires_merge_decision_for_existing_persistent_twin(
         code=delivery["simulated_code"],
         duration="7_days",
         timezone="Europe/Madrid",
+        purpose="sign_in",
     )
 
     assert status == HTTPStatus.CONFLICT
@@ -376,12 +401,14 @@ def test_resolve_merge_can_discard_session_twin_and_load_persistent_twin(
     delivery = web._request_code_payload(
         email="user@example.com",
         ip_address="127.0.0.1",
+        purpose="sign_in",
     )
     status, payload = web._verify_code_payload(
         email="user@example.com",
         code=delivery["simulated_code"],
         duration="7_days",
         timezone="Europe/Madrid",
+        purpose="sign_in",
     )
     assert status == HTTPStatus.CONFLICT
 

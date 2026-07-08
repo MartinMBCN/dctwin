@@ -147,6 +147,9 @@ Started locally:
   - the delete action is hidden from the immediate account-creation success state and shown from account management;
   - sign-in after deletion reports "No account found for this email";
   - deleted account emails can be reused for a new account and Persistent Twin.
+- Added Sprint 4 account-creation polish through `0.2.11`:
+  - creating an account with an existing email directs the user to log in instead of surfacing a rate-limit-style error;
+  - fresh account creation no longer carries over a previous account email in the email field.
 
 Agreed UX copy:
 

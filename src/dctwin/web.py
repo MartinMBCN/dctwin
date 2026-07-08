@@ -159,6 +159,11 @@ def _request_code_payload(
     elif purpose == "create_account":
         if not _load_session().get("twin"):
             raise ValueError("Create a Digital Career Twin before creating an account")
+        if repo.get_user_by_email(email=normalized_email) is not None:
+            raise ValueError(
+                "An account with this email address already exists. "
+                "Please try logging in instead."
+            )
     else:
         raise ValueError("Choose create_account or sign_in")
 

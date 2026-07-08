@@ -2,6 +2,12 @@
 
 Terse user-facing and acceptance-testing notes for each app increment. The app version is exposed at `/api/health` as `app_version`.
 
+## 0.2.11 — Account creation duplicate guidance
+
+- Account creation with an existing email now says: `An account with this email address already exists. Please try logging in instead.`
+- Duplicate-account checks now happen before one-time-code issuance and rate limiting.
+- Fresh account creation no longer pre-populates the email field with a previous signed-in address.
+
 ## 0.2.10 — Account deletion wording and reuse
 
 - Renamed signed-in destructive action from `Delete my DCT` to `Delete my account`.
