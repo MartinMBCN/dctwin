@@ -2,6 +2,119 @@
 
 Terse user-facing and acceptance-testing notes for each app increment. The app version is exposed at `/api/health` as `app_version`.
 
+## 0.3.16 — Overview Brief Quality Contract
+
+- Added an explicit six-part Overview Brief Quality Contract covering Information Architecture, Editorial Quality, Evidence Quality, Presentation, Reasoning Quality and Completeness.
+- Added ADR-014 to make the quality contract an architectural decision for Overview Brief extraction, reconciliation and rendering.
+- Updated the Foundry extraction prompt to target the quality dimensions directly, especially section distinction, evidence strength, higher-order reasoning and completeness.
+- Bumped the source-cache contract so quality-contract extraction is tested against fresh candidates.
+
+## 0.3.15 — Overview Brief richness recovery
+
+- Retuned compact extraction to aim for a fuller 8–12 item Overview Brief rather than overly terse coverage.
+- Added schema-level caps for Overview Brief items, recurring patterns, capability hypotheses and unclear questions.
+- Refiled governance/operating-model observations into Patterns and structural observations.
+- Refiled P&L/reporting-line/detail caveats into Areas of less clarity.
+- Suppressed non-CV-native caveats about retention outcomes, post-engagement impact and pure-contract status.
+- Bumped the source-cache contract so new Overview Brief generation is tested without stale candidates.
+
+## 0.3.14 — Strengths tab and leaner Overview
+
+- Moved Current interpretation out of the Overview tab into a dedicated Strengths tab.
+- Deprecated the Questions tab from the main Career Twin surface; unresolved questions remain internal until the future Interview feature.
+- Kept Overview focused on the Overview Brief and account-save prompt.
+
+## 0.3.13 — Overview Brief domain dedupe
+
+- Merges career-scope bullets that describe the same seniority, date-range, industry and geography pattern even when phrased differently.
+- Merges quantified-impact bullets by shared outcome domain and metrics, reducing repeated cost/reliability/release-frequency claims.
+- Merges contract/frequent-transition attention items more aggressively.
+- Suppresses handoff and long-term ownership gaps that a CV usually cannot answer reliably.
+
+## 0.3.12 — Bounded compact extraction
+
+- Increased the compact extraction output ceiling while keeping the extraction stage bounded.
+- Instructed the model to keep source quotes, role summaries, achievements and interpretive items concise.
+- Capped the interpretive layer conceptually: no more than 10 Overview Brief items, 6 recurring patterns, 6 capability hypotheses and 5 unclear questions.
+- Bumped the source-cache contract so prior extraction candidates do not mask the bounded-extraction behavior.
+
+## 0.3.11 — Overview Brief section normalization
+
+- Normalizes structured Overview Brief items before deduplication so quantified outcome items file under Areas of higher confidence, contract/frequent-transition items file under professionally salient attention items, and team/leadership scale items file under patterns.
+- Suppresses recruiter-logistics gaps that CV evidence cannot reasonably answer, such as availability, notice period, or reasons for short role duration.
+- Added regression coverage for section normalization and logistical-gap suppression.
+
+## 0.3.10 — Overview Brief confidence and capability dedupe
+
+- Deduplicates confidence statements more aggressively when they share explicit source/fact/metric confidence language.
+- Deduplicates capability-adjacent Overview Brief items when they share domain terms in the same section, such as MEL, frameworks, monitoring, dashboards, platform, automation, AI, health, KPIs and systems.
+- Added regression coverage for confidence-statement and MEL/framework capability overlap.
+
+## 0.3.9 — Overview Brief item deduplication
+
+- Added section-aware fuzzy deduplication for structured Overview Brief items during reconciliation.
+- Merges duplicate career-scope, contract-pattern, quantified-outcome, uncertainty and attention-item observations across multiple CVs.
+- Preserves supporting evidence IDs, salience and confidence when duplicate brief items are merged.
+
+## 0.3.8 — Overview Brief reconciliation references
+
+- Fixed multi-source reconciliation so incoming Overview Brief item evidence references are remapped to the final canonical evidence IDs.
+- Added regression coverage for duplicate evidence merging with structured Overview Brief items.
+
+## 0.3.7 — Structured Overview Brief items
+
+- Added ADR-013: Overview Brief is assembled from structured brief items.
+- Added `OverviewBriefItem` extraction support so the model emits atomic brief-worthy observations rather than one prose brief.
+- Added canonical DCT storage for `reflection.overview_brief_items`.
+- Updated the UI to render structured Overview Brief items directly and keep prose parsing only as a backward-compatible fallback.
+- Bumped the extraction cache contract to force regeneration under the structured brief-item contract.
+
+## 0.3.6 — Canonical Overview Brief headings
+
+- Normalized generated Overview Brief labels into the agreed executive-brief headings.
+- Mapped `Recurring patterns`, `Interpretation`, `Seniority and scope`, and related generated labels into `Patterns and structural observations`.
+- Preserved the full `Professionally salient attention items a recruiter or assessor would likely query` heading.
+- Split confidence content into `Areas of higher confidence` and `Confidence statement` when the generated brief combines them.
+
+## 0.3.5 — Overview Brief section parsing
+
+- Expanded Overview Brief formatter recognition for model-generated labels including Observable facts, Education, Seniority and scope, Recurring patterns, Uncertainties and limits, and Confidence.
+- Reduced wall-of-text bullets by splitting semicolon-separated list items while preserving punctuation inside parentheses.
+
+## 0.3.4 — Overview Brief presentation
+
+- Reformatted the Overview Brief for scanability using section headings, whitespace and bullets.
+- Added parsing for common brief sections such as Career in brief, Patterns, Areas of less clarity, Attention items and Confidence statement.
+- Split dense semicolon-heavy briefing text into scannable bullets and nested bullets where the brief introduces grouped examples.
+
+## 0.3.3 — Overview Brief alignment
+
+- Aligned Overview generation to `docs/sprints/sprint5b.md`.
+- Reframed the overview as an objective confidential executive briefing rather than conversational Mirror prose.
+- Updated prompt and fallback rules to establish observable facts before interpretation, include uncertainty neutrally and end with an evidence/confidence statement.
+- Rendered the Overview Brief as briefing paragraphs instead of a single large headline.
+- Bumped the extraction cache contract to force fresh extraction under the Overview Brief rules.
+
+## 0.3.2 — Evidence-led Mirror voice
+
+- Replaced first-person machine phrasing with evidence-led summary language such as `Your CV presents you as...`.
+- Added a Sprint 5 Mirror Voice Contract covering concrete anchors, uncertainty phrasing and phrases to avoid.
+- Updated the extraction prompt and app fallback to avoid coaching-style next-step prompts inside the overview summary.
+
+## 0.3.1 — Conversational summary and education extraction
+
+- Added education, certification, training and professional development to the compact CV extraction contract.
+- Mapped extracted education/professional-development entries into canonical DCT person facts for the Education/Training tab.
+- Tightened the reflection-summary prompt and mapper fallback toward a direct Mirror voice.
+- Versioned the source cache by extraction-contract version so old cached candidates do not mask extraction changes.
+
+## 0.3.0 — Sprint 5 Career Mirror surface
+
+- Split the Career Mirror into Overview, Career themes, Questions, Career timeline and Education/Training tabs.
+- Moved mechanical views behind `?debug=true`: source blocks, reconciliation, timings, Twin JSON, local reset and technical input blurb.
+- Rewrote the Overview summary into a more conversational “current understanding” voice.
+- Added local timing JSONL logging for ingestion and manual-achievement updates.
+
 ## 0.2.11 — Account creation duplicate guidance
 
 - Account creation with an existing email now says: `An account with this email address already exists. Please try logging in instead.`

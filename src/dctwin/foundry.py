@@ -228,7 +228,8 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
             "current_utc": datetime.now(UTC).isoformat(),
             "task": (
                 "Extract only compact CV structure: person name if clearly stated, "
-                "roles, achievement/responsibility claims, and a compact interpretation. "
+                "roles, education/professional development facts, "
+                "achievement/responsibility claims, and a compact interpretation. "
                 "Do not produce the full DCT structure."
             ),
             "normalized_source_document": source_document,
@@ -238,16 +239,49 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
             instructions=(
                 "You are the fast extraction stage for a Digital Career Twin. "
                 "Return compact, source-grounded JSON only. Extract all clear roles "
-                "and material achievements/responsibilities, preserving source block "
-                "references and quotes. Preserve role start and end dates when the source "
+                "and all clear education, certification, training, and professional "
+                "development entries. Extract formal degrees as education; extract "
+                "courses, certifications, accreditations, and professional development "
+                "as certification unless the source clearly says otherwise. Extract all "
+                "material achievements/responsibilities, preserving source block "
+                "references and short quotes. Keep quotes to short source snippets, not "
+                "whole bullets or paragraphs. Keep role summaries and achievement text "
+                "concise. Preserve role start and end dates when the source "
                 "states them; use YYYY, YYYY-MM, or YYYY-MM-DD. For current/present roles, "
-                "preserve the start date and use null for the end date. Also provide a concise interpretation: recurring "
-                "patterns, capability hypotheses, unclear questions, and a reflective "
-                "summary. Do not produce the full DCT schema."
+                "preserve the start date and use null for the end date. Also provide a "
+                "bounded compact interpretation: recurring patterns, capability "
+                "hypotheses, unclear questions, and atomic overview_brief_items. Each "
+                "overview_brief_item should be one professionally salient sentence or "
+                "bullet-worthy observation. Aim for 8 to 12 overview_brief_items when "
+                "the source contains enough evidence, with no more than 12 total: "
+                "1-3 career-in-brief items, 2-4 structural pattern items, 2-4 "
+                "higher-confidence items, 0-2 less-clarity items, 0-2 attention items, "
+                "and 1 confidence statement. Emit no more than "
+                "6 recurring_patterns, 6 capability_hypotheses, and 5 unclear_questions. "
+                "Prefer concise, specific, evidence-rich items over generic coverage. "
+                "Do not emit the final displayed brief as "
+                "prose. Establish observable facts before drawing interpretations. "
+                "Include professionally salient structural observations when supported: "
+                "career duration, role count, geography, industry/domain movement, "
+                "seniority, management emphasis, consulting periods, career gaps, "
+                "concurrent roles, quantified outcomes, unusual patterns and attention "
+                "items a recruiter, hiring manager or executive assessor would probably "
+                "ask about. Interpretations should be traceable to multiple observations. "
+                "Present uncertainty neutrally. Apply the Overview Brief quality contract: "
+                "select the right salient information, keep section purposes distinct, "
+                "order the strongest observations first, prioritize stronger evidence, "
+                "make interesting higher-order observations rather than obvious labels, "
+                "and check for trajectory, progression, mobility, domain changes, "
+                "scale, outcome clusters, gaps, overlaps and compressed tenures. "
+                "Include at least one confidence_statement "
+                "item. Avoid motivational language, coaching language, conversational "
+                "fillers and anthropomorphic phrases such as 'I think', 'I feel', "
+                "'I'm reading', 'My impression is', 'You strike me as', or 'If this feels "
+                "directionally right'. Do not produce the full DCT schema."
             ),
             input=json.dumps(request, ensure_ascii=False),
             reasoning={"effort": "minimal"},
-            max_output_tokens=5_000,
+            max_output_tokens=8_000,
             store=False,
             text={
                 "verbosity": "low",
@@ -289,6 +323,7 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
                 "source_label",
                 "person_name",
                 "roles",
+                "education_training",
                 "achievements",
                 "interpretation",
             ],
@@ -351,19 +386,106 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
                         },
                     },
                 },
+                "education_training": {
+                    "type": "array",
+                    "description": "Education, certifications, training, courses, and professional development entries stated in the source.",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "kind",
+                            "value",
+                            "source_block_id",
+                            "quote",
+                            "confidence",
+                        ],
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": ["education", "certification"],
+                                "description": "Use education for formal degree/school entries; certification for courses, certifications, accreditations, and professional development.",
+                            },
+                            "value": {"type": "string"},
+                            **source_ref_properties,
+                        },
+                    },
+                },
                 "interpretation": {
                     "type": "object",
                     "additionalProperties": False,
                     "required": [
                         "reflection_summary",
+                        "overview_brief_items",
                         "recurring_patterns",
                         "capability_hypotheses",
                         "unclear_questions",
                     ],
                     "properties": {
-                        "reflection_summary": {"type": "string"},
+                        "reflection_summary": {
+                            "type": "string",
+                            "description": "Short compatibility summary. The primary Overview Brief contract is overview_brief_items.",
+                        },
+                        "overview_brief_items": {
+                            "type": "array",
+                            "maxItems": 12,
+                            "description": "Atomic brief-worthy observations for deterministic application assembly of the Overview Brief.",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": [
+                                    "section",
+                                    "kind",
+                                    "text",
+                                    "salience",
+                                    "confidence",
+                                    "supporting_achievement_indexes",
+                                ],
+                                "properties": {
+                                    "section": {
+                                        "type": "string",
+                                        "enum": [
+                                            "career_in_brief",
+                                            "patterns_and_structural_observations",
+                                            "areas_of_higher_confidence",
+                                            "areas_of_less_clarity",
+                                            "professionally_salient_attention_items",
+                                            "confidence_statement",
+                                        ],
+                                    },
+                                    "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                            "observation",
+                                            "interpretation",
+                                            "uncertainty",
+                                            "attention_item",
+                                            "confidence_statement",
+                                        ],
+                                    },
+                                    "text": {
+                                        "type": "string",
+                                        "description": "One concise sentence suitable for rendering as a bullet.",
+                                    },
+                                    "salience": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1,
+                                    },
+                                    "confidence": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 1,
+                                    },
+                                    "supporting_achievement_indexes": {
+                                        "type": "array",
+                                        "items": {"type": "integer", "minimum": 0},
+                                    },
+                                },
+                            },
+                        },
                         "recurring_patterns": {
                             "type": "array",
+                            "maxItems": 6,
                             "items": {
                                 "type": "object",
                                 "additionalProperties": False,
@@ -379,6 +501,7 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
                         },
                         "capability_hypotheses": {
                             "type": "array",
+                            "maxItems": 6,
                             "items": {
                                 "type": "object",
                                 "additionalProperties": False,
@@ -410,6 +533,7 @@ class FoundryExtractionTwinProvider(FoundryTwinProvider):
                         },
                         "unclear_questions": {
                             "type": "array",
+                            "maxItems": 5,
                             "items": {"type": "string"},
                         },
                     },

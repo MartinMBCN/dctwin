@@ -104,6 +104,17 @@
     "summary": "The source supports platform leadership linked to a measurable delivery improvement.",
     "strongly_supported": ["A reusable platform reduced deployment time by 60%."],
     "unclear": ["The scale of leadership responsibility is not stated."],
-    "suggested_questions": ["What team and organizational scope did the Platform Lead role include?"]
+    "suggested_questions": ["What team and organizational scope did the Platform Lead role include?"],
+    "overview_brief_items": [
+      {
+        "id": "brief_platform_delivery",
+        "section": "career_in_brief",
+        "kind": "observation",
+        "text": "The available evidence links platform leadership to a measurable deployment-time improvement.",
+        "salience": 0.8,
+        "confidence": 0.8,
+        "supporting_evidence_ids": ["ev_deployment_time"]
+      }
+    ]
   }
 }

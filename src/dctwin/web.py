@@ -30,6 +30,8 @@ SESSION_DIR = ".dctwin-local"
 SESSION_FILE = "session-state.json"
 CACHE_DIR = "cache"
 ACCOUNT_FILE = "accounts.json"
+LOG_DIR = "logs"
+CACHE_CONTRACT_VERSION = "cv_extraction_v8"
 
 
 def _project_root() -> Path:
@@ -122,6 +124,27 @@ def _manual_cv_label() -> str:
 
 def _timing_mark(timings: list[dict[str, Any]], event: str, start: float) -> None:
     timings.append({"event": event, "elapsed_ms": round((perf_counter() - start) * 1000, 1)})
+
+
+def _write_timing_log(
+    *,
+    operation: str,
+    filename: str,
+    source_id: str | None,
+    timings: list[dict[str, Any]],
+) -> Path:
+    path = _local_state_path() / LOG_DIR / "timings.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "created_at": datetime.now(ZoneInfo("UTC")).isoformat(),
+        "operation": operation,
+        "filename": filename,
+        "source_id": source_id,
+        "timings": timings,
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return path
 
 
 def _append_source_document(
@@ -444,20 +467,29 @@ def _session_duration(value: str) -> Any:
 
 def _cache_path(source_document: dict[str, Any]) -> Path:
     digest = source_document["content_hash"].removeprefix("sha256:")
-    return _project_root() / SESSION_DIR / CACHE_DIR / f"{digest}.candidate.json"
+    filename = f"{digest}.{CACHE_CONTRACT_VERSION}.candidate.json"
+    return _project_root() / SESSION_DIR / CACHE_DIR / filename
 
 
 def _load_cached_candidate(source_document: dict[str, Any]) -> dict[str, Any] | None:
     path = _cache_path(source_document)
     if path.is_file():
-        return load_json(path)
+        cached = load_json(path)
+        if cached.get("cache_contract_version") == CACHE_CONTRACT_VERSION:
+            return cached.get("candidate_twin")
     return None
 
 
 def _save_cached_candidate(source_document: dict[str, Any], candidate: dict[str, Any]) -> None:
     path = _cache_path(source_document)
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_json(candidate, path)
+    write_json(
+        {
+            "cache_contract_version": CACHE_CONTRACT_VERSION,
+            "candidate_twin": candidate,
+        },
+        path,
+    )
 
 
 def _provider() -> FoundryTwinProvider:
@@ -746,6 +778,12 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             )
             _save_session(session)
             _save_authenticated_session_twin(self._auth_session_id())
+            _write_timing_log(
+                operation="manual_evidence",
+                filename="Added achievements",
+                source_id=source_doc["source_id"],
+                timings=timings,
+            )
             self._send_json(
                 HTTPStatus.OK,
                 self._response_payload(
@@ -830,6 +868,12 @@ class LocalAppHandler(BaseHTTPRequestHandler):
         session.setdefault("enrollment_documents", []).append(enrollment_document)
         _save_session(session)
         _save_authenticated_session_twin(self._auth_session_id())
+        _write_timing_log(
+            operation="source_adaptation",
+            filename=filename,
+            source_id=source_document["source_id"],
+            timings=timings,
+        )
         return self._response_payload(
             source_document=source_document,
             enrollment_document=enrollment_document,

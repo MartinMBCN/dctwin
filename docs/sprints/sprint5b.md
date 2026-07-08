@@ -148,3 +148,92 @@ Prefer:
 Those keep the system grounded.
 The Twin doesn't have intuition.
 It has evidence.
+
+Overview Brief Quality Contract
+
+The Overview Brief should be assessed against six distinct quality dimensions. These dimensions are separate so that a weak brief can be diagnosed precisely rather than improved by vague prompt tuning.
+
+1. Information Architecture
+
+Target outcome: the right information is present, organized into sections with distinct responsibilities.
+
+Section responsibilities:
+* Career in brief: scope, timeframe, trajectory, seniority, domains, geography and broad role pattern.
+* Patterns and structural observations: recurring ways of working, repeated organizational contexts, operating model, platform, transformation and scale patterns.
+* Areas of higher confidence: claims strongly supported by repeated evidence, explicit metrics, role dates, source quotes or multiple corroborating observations.
+* Areas of less clarity: material ambiguity that affects interpretation and that the source type could reasonably clarify.
+* Professionally salient attention items: neutral questions a recruiter, hiring manager, promotion panel or executive assessor would likely raise because they affect positioning, risk or fit.
+* Confidence statement: evidence basis, confidence level and limits of the current Twin.
+
+Quality rules:
+* Remove duplication within and across sections.
+* Do not allow a section to compete with another section for the same purpose.
+* Ensure professionally salient observations are not lost merely because they are neutral or potentially awkward.
+* Include trajectory, progression, inflection points and structural career shape when evidence supports them.
+
+2. Editorial Quality
+
+Target outcome: the brief reads as though a senior human analyst deliberately ordered it.
+
+Quality rules:
+* Put the strongest and most synthesizing observation first within each section.
+* Prefer one strong synthesized bullet over several adjacent factual fragments.
+* Use concrete anchors inside synthesis: dates, industries, metrics, geographies, team sizes, role types.
+* Avoid generic openers such as "demonstrated ability" unless followed by unusually concrete evidence.
+* Avoid prose that sounds like a model explaining itself.
+
+3. Evidence Quality
+
+Target outcome: every statement deserves to be there.
+
+Quality rules:
+* Every observation must be directly supported by evidence.
+* Interpretations should normally be supported by multiple observations.
+* Stronger evidence should receive greater prominence.
+* Weak or single-source evidence should be framed narrowly.
+* Absence-of-evidence claims should be used sparingly.
+* Suppress claims a CV would not normally answer, including notice period, motivation for leaving, handoff, availability, retention outcomes, post-engagement impact or employer intent.
+
+4. Presentation
+
+Target outcome: a reader can scan the brief in thirty seconds and understand the principal characteristics of the Twin.
+
+Quality rules:
+* Use stable headings.
+* Use concise bullet points.
+* Preserve whitespace and scanability.
+* Avoid dense narrative paragraphs except where required for higher-order interpretation.
+* Keep typography and section rhythm consistent.
+
+5. Reasoning Quality
+
+Target outcome: the Twin makes professionally interesting observations, not merely accurate ones.
+
+Quality rules:
+* Prefer higher-order patterns over obvious labels.
+* Explain what repeated facts imply about professional positioning.
+* Surface problem-specialization when it is stronger than industry-specialization.
+* Connect role pattern, context and outcomes.
+* Avoid shallow observations that merely restate a CV heading.
+
+Example:
+* Weak: Frequent contract roles.
+* Stronger: The evidence suggests a pattern of being brought into organizations during periods of significant change, especially where operating model, platform or delivery-scaling problems are present.
+
+6. Completeness
+
+Target outcome: the Twin notices the same structural features a careful executive recruiter, career strategist or assessor would notice.
+
+Completeness checklist:
+* Career trajectory and seniority progression.
+* Role sequence and inflection points.
+* Contract, interim, consulting or permanent pattern.
+* International mobility.
+* Domain and industry changes.
+* Repeated organizational contexts.
+* Scale of teams, budgets, platforms or programs.
+* Measurable outcome clusters.
+* Gaps, overlaps or compressed tenures.
+* Foundational education, early experience or credentials.
+* Current positioning implied by latest roles.
+* Alignment between stated skills and evidenced work.

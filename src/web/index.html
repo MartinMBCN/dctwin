@@ -91,6 +91,15 @@
     .status-card strong { display: block; color: #596273; margin-bottom: 5px; }
     .save-callout { border: 1px solid #c7ced9; background: linear-gradient(135deg, #f8fafc, #e9edf3); border-radius: 16px; padding: 16px; margin: 0 0 24px; display: flex; justify-content: space-between; gap: 14px; align-items: center; }
     .save-callout strong { display: block; margin-bottom: 4px; }
+    .overview-brief { font-size: 14px; line-height: 1.55; }
+    .brief-section { padding: 0 0 18px; margin: 0 0 18px; border-bottom: 1px solid var(--line); }
+    .brief-section:last-child { border-bottom: 0; margin-bottom: 0; }
+    .brief-section h3 { margin: 0 0 7px; font-size: 18px; line-height: 1.22; letter-spacing: -.01em; }
+    .brief-lead { margin: 0 0 9px; color: #354151; }
+    .brief-paragraph { margin: 0; color: #354151; }
+    .brief-list { margin: 8px 0 0; padding-left: 22px; display: grid; gap: 7px; }
+    .brief-list.nested { margin-top: 7px; padding-left: 20px; gap: 4px; color: #465365; }
+    .brief-list li { padding-left: 2px; }
     .account-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .modal-backdrop { position: fixed; inset: 0; background: rgba(31,41,51,.38); display: none; place-items: center; padding: 24px; z-index: 20; }
     .modal-backdrop.show { display: grid; }
@@ -130,9 +139,9 @@
         <div class="card-head">
           <div>
             <h2>Add source material</h2>
-            <div class="subtle">CV file · pasted CV · added achievements</div>
+            <div class="subtle debug-only">CV file · pasted CV · added achievements</div>
           </div>
-          <button class="button secondary" id="reset-button">Reset session &amp; cache</button>
+          <button class="button secondary debug-only" id="reset-button">Reset session &amp; cache</button>
         </div>
         <nav class="input-tabs" aria-label="Input methods">
           <button class="input-tab active" data-input-tab="upload">Upload a file</button>
@@ -184,11 +193,15 @@
       <article class="card">
         <div class="card-head"><div><h2>Your Career Twin</h2><div class="subtle" id="result-subtitle">Waiting for a source</div></div></div>
         <nav class="tabs" aria-label="Result views">
-          <button class="tab active" data-tab="mirror">Career Mirror</button>
-          <button class="tab" data-tab="blocks">Source blocks</button>
-          <button class="tab" data-tab="reconciliation">Reconciliation</button>
-          <button class="tab" data-tab="timings">Timings</button>
-          <button class="tab" data-tab="json">Twin JSON</button>
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="strengths">Strengths</button>
+          <button class="tab" data-tab="themes">Career themes</button>
+          <button class="tab" data-tab="timeline">Career timeline</button>
+          <button class="tab" data-tab="education">Education/Training</button>
+          <button class="tab debug-only" data-tab="blocks">Source blocks</button>
+          <button class="tab debug-only" data-tab="reconciliation">Reconciliation</button>
+          <button class="tab debug-only" data-tab="timings">Timings</button>
+          <button class="tab debug-only" data-tab="json">Twin JSON</button>
         </nav>
         <div class="viewer" id="viewer">
           <div class="empty"><div class="empty-inner"><strong>Your session Twin will appear here</strong>Add a CV or pasted CV text to create the first Twin, then add more sources or achievements to update it.</div></div>
@@ -237,7 +250,8 @@
       { at: 16000, title: 'Re-constructing your digital twin' },
       { at: 26000, title: 'Rendering your digital twin for presentation' }
     ];
-    const state = { tab: 'mirror', result: null, roles: [], busyTimer: null, busyStarted: 0, busyStages: firstCvBusyStages, auth: { authenticated: false }, authCandidates: [], pendingCode: null, mergeDecision: null, accountMode: 'start', authEmail: '' };
+    const isDebugMode = new URLSearchParams(window.location.search).get('debug') === 'true';
+    const state = { tab: 'overview', result: null, roles: [], busyTimer: null, busyStarted: 0, busyStages: firstCvBusyStages, auth: { authenticated: false }, authCandidates: [], pendingCode: null, mergeDecision: null, accountMode: 'start', authEmail: '' };
     const input = document.querySelector('#file-input');
     const dropZone = document.querySelector('#drop-zone');
     const viewer = document.querySelector('#viewer');
@@ -273,6 +287,7 @@
       document.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab === button));
       render();
     }));
+    document.querySelectorAll('.debug-only').forEach(element => { element.style.display = isDebugMode ? '' : 'none'; });
 
     fetch('/api/health').then(response => response.json()).then(health => {
       document.querySelector('#app-version').textContent = health.app_version ? `v${health.app_version}` : '';
@@ -377,8 +392,8 @@
       document.querySelector('#metric-blocks').textContent = result.summary.blocks;
       document.querySelector('#metric-added').textContent = result.reconciliation?.evidence_added ?? '—';
       document.querySelector('#metric-merged').textContent = result.reconciliation?.evidence_merged ?? '—';
-      state.tab = 'mirror';
-      document.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === 'mirror'));
+      state.tab = 'overview';
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === 'overview'));
       render();
       notify('Session Twin updated');
     }
@@ -471,9 +486,256 @@
         const showSourceQuotes = (twin.sources || []).length > 1;
         const roles = (twin.roles || []).map(role => renderRoleWithAchievements(role, evidenceByRole.get(role.id) || [], showSourceQuotes)).join('');
         const patterns = (twin.reflection.strongly_supported || []).map(item => `<div class="block"><div class="block-text">${escapeHtml(item)}</div></div>`).join('');
-        const questions = (twin.reflection.suggested_questions || []).map(item => `<div class="status-card"><strong>Question</strong>${escapeHtml(item)}</div>`).join('');
-        viewer.innerHTML = `${saveCallout}<section style="margin-bottom:24px"><div class="eyebrow">Reflection</div><h2 style="font-family:Georgia,serif;font-weight:500;font-size:27px;margin:7px 0 10px">${escapeHtml(twin.reflection.summary)}</h2></section><section><div class="eyebrow" style="margin-bottom:10px">Current hypotheses</div>${inferenceCards || '<p class="subtle">No cross-evidence inferences yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Recurring career themes</div>${patterns || '<p class="subtle">No recurring career themes yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Questions to resolve</div>${questions || '<p class="subtle">No open questions yet.</p>'}</section><section style="margin-top:26px"><div class="eyebrow" style="margin-bottom:10px">Career timeline</div>${roles}</section>`;
+        const education = renderEducationTraining(twin);
+        if (state.tab === 'strengths') {
+          viewer.innerHTML = `<section><div class="eyebrow" style="margin-bottom:10px">Current interpretation</div>${inferenceCards || '<p class="subtle">No cross-evidence strengths yet.</p>'}</section>`;
+        } else if (state.tab === 'themes') {
+          viewer.innerHTML = `<section><div class="eyebrow" style="margin-bottom:10px">This is my current understanding of your recurring career themes</div>${patterns || '<p class="subtle">No recurring career themes yet.</p>'}</section>`;
+        } else if (state.tab === 'timeline') {
+          viewer.innerHTML = `<section><div class="eyebrow" style="margin-bottom:10px">This is my current understanding of your career timeline</div>${roles || '<p class="subtle">No roles have been identified yet.</p>'}</section>`;
+        } else if (state.tab === 'education') {
+          viewer.innerHTML = education;
+        } else {
+          if (state.tab === 'questions') state.tab = 'overview';
+          viewer.innerHTML = `${saveCallout}<section><div class="eyebrow" style="margin-bottom:14px">Overview Brief</div>${renderOverviewBrief(twin.reflection)}</section>`;
+        }
       }
+    }
+
+    function renderOverviewBrief(reflection) {
+      const structuredItems = reflection?.overview_brief_items || [];
+      const sections = structuredItems.length
+        ? overviewBriefItemSections(structuredItems)
+        : overviewBriefSections(overviewBrief(reflection?.summary));
+      return `<div class="overview-brief">${sections.map(renderBriefSection).join('')}</div>`;
+    }
+
+    function overviewBriefItemSections(items) {
+      const titles = {
+        career_in_brief: 'Career in brief',
+        patterns_and_structural_observations: 'Patterns and structural observations',
+        areas_of_higher_confidence: 'Areas of higher confidence',
+        areas_of_less_clarity: 'Areas of less clarity',
+        professionally_salient_attention_items: 'Professionally salient attention items a recruiter or assessor would likely query',
+        confidence_statement: 'Confidence statement'
+      };
+      const order = Object.keys(titles);
+      const grouped = new Map();
+      for (const item of items) {
+        const section = order.includes(item.section) ? item.section : 'patterns_and_structural_observations';
+        if (!grouped.has(section)) grouped.set(section, []);
+        grouped.get(section).push(item);
+      }
+      return order.filter(section => grouped.has(section)).map(section => {
+        const sorted = grouped.get(section).slice().sort((left, right) => (right.salience || 0) - (left.salience || 0) || (right.confidence || 0) - (left.confidence || 0));
+        return {
+          title: titles[section],
+          lead: '',
+          body: '',
+          items: sorted.map(item => ({ text: item.text, children: [] }))
+        };
+      });
+    }
+
+    function renderBriefSection(section) {
+      const lead = section.lead ? `<p class="brief-lead">${escapeHtml(section.lead)}</p>` : '';
+      const body = section.items.length
+        ? `<ul class="brief-list">${section.items.map(renderBriefItem).join('')}</ul>`
+        : `<p class="brief-paragraph">${escapeHtml(section.body)}</p>`;
+      return `<section class="brief-section"><h3>${escapeHtml(section.title)}</h3>${lead}${body}</section>`;
+    }
+
+    function renderBriefItem(item) {
+      const nested = item.children.length
+        ? `<ul class="brief-list nested">${item.children.map(child => `<li>${escapeHtml(child)}</li>`).join('')}</ul>`
+        : '';
+      return `<li>${escapeHtml(item.text)}${nested}</li>`;
+    }
+
+    function overviewBriefSections(text) {
+      const normalized = text.replace(/\s+/g, ' ').trim();
+      const headingMap = [
+        ['The available evidence presents observable facts', 'Career in brief'],
+        ['Observable facts', 'Career in brief'],
+        ['Career in brief', 'Career in brief'],
+        ['Education', 'Career in brief'],
+        ['Professional development', 'Career in brief'],
+        ['Seniority and scope', 'Patterns and structural observations'],
+        ['Recurring patterns', 'Patterns and structural observations'],
+        ['Interpretation', 'Patterns and structural observations'],
+        ['Structural observations a recruiter or assessor would likely probe', 'Professionally salient attention items a recruiter or assessor would likely query'],
+        ['Patterns and structural observations', 'Patterns and structural observations'],
+        ['Strongest recurring patterns', 'Patterns and structural observations'],
+        ['Career progression', 'Patterns and structural observations'],
+        ['Distinctive characteristics', 'Patterns and structural observations'],
+        ['Areas of higher confidence', 'Areas of higher confidence'],
+        ['Areas of less clarity', 'Areas of less clarity'],
+        ['Areas of uncertainty', 'Areas of less clarity'],
+        ['Uncertainties and limits', 'Areas of less clarity'],
+        ['Unclear/less-evident areas', 'Areas of less clarity'],
+        ['Professionally salient attention items a recruiter or assessor would likely query', 'Professionally salient attention items a recruiter or assessor would likely query'],
+        ['Professionally salient attention items', 'Professionally salient attention items a recruiter or assessor would likely query'],
+        ['Attention items', 'Professionally salient attention items a recruiter or assessor would likely query'],
+        ['Confidence', 'Confidence statement'],
+        ['Confidence statement', 'Confidence statement']
+      ];
+      const matches = [];
+      for (const [label, title] of headingMap) {
+        const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = new RegExp(`\\b${escaped}:`, 'i').exec(normalized);
+        if (match) matches.push({ index: match.index, end: match.index + match[0].length, label, title });
+      }
+      matches.sort((a, b) => a.index - b.index);
+      const sections = [];
+      const firstIndex = matches.length ? matches[0].index : normalized.length;
+      const intro = normalized.slice(0, firstIndex).trim();
+      if (intro) sections.push(buildBriefSection('Career in brief', intro));
+      matches.forEach((match, index) => {
+        const next = matches[index + 1]?.index ?? normalized.length;
+        const body = normalized.slice(match.end, next).trim();
+        if (body) sections.push(buildBriefSection(match.title, body));
+      });
+      return mergeBriefSections(sections.length ? sections : [buildBriefSection('Career in brief', normalized)]);
+    }
+
+    function mergeBriefSections(sections) {
+      const merged = [];
+      for (const section of sections) {
+        const previous = merged[merged.length - 1];
+        if (previous && previous.title === section.title) {
+          previous.lead = previous.lead || section.lead;
+          previous.body = [previous.body, section.body].filter(Boolean).join(' ');
+          previous.items = [...previous.items, ...section.items];
+        } else {
+          merged.push({ ...section, items: [...section.items] });
+        }
+      }
+      return splitConfidenceSections(merged);
+    }
+
+    function splitConfidenceSections(sections) {
+      return sections.flatMap(section => {
+        if (section.title !== 'Confidence statement') return [section];
+        const marker = section.body.match(/\b(This reflection\b.+)$/i);
+        if (!marker) return [section];
+        const confidenceItems = section.body.slice(0, marker.index).trim();
+        const confidenceStatement = marker[1].trim();
+        if (!confidenceItems) return [section];
+        return [
+          buildBriefSection('Areas of higher confidence', confidenceItems),
+          buildBriefSection('Confidence statement', confidenceStatement)
+        ];
+      });
+    }
+
+    function buildBriefSection(title, body) {
+      let content = body.trim();
+      let lead = '';
+      const leadMatch = content.match(/^(.{12,160}?:)\s+(.+)$/);
+      if ((title === 'Career in brief' || title === 'Patterns and structural observations') && leadMatch) {
+        lead = leadMatch[1];
+        content = leadMatch[2];
+      }
+      const paragraphOnly = ['Areas of higher confidence', 'Confidence statement'].includes(title) && !content.includes(';') && !content.includes(',');
+      const items = paragraphOnly ? [] : splitBriefItems(content, title).map(item => splitNestedBriefItem(item));
+      return { title, lead, body: content, items };
+    }
+
+    function splitBriefItems(text, title = '') {
+      const content = text.trim();
+      if (!content) return [];
+      if (content.includes(';')) {
+        const semicolonItems = splitOutsideParentheses(content, ';').map(cleanBriefItem).filter(Boolean);
+        if (semicolonItems.length > 1) return semicolonItems;
+      }
+      if (['Patterns and structural observations', 'Professionally salient attention items a recruiter or assessor would likely query'].includes(title)) {
+        const commaItems = splitOutsideParentheses(content, ',')
+          .map(cleanBriefItem)
+          .map(value => value.replace(/^and\s+/i, ''))
+          .filter(Boolean);
+        if (commaItems.length > 2) return commaItems;
+      }
+      const sentences = content.split(/(?<=[.!?])\s+(?=[A-Z0-9$€£])/).map(cleanBriefItem).filter(Boolean);
+      return sentences.length > 1 ? sentences : [content];
+    }
+
+    function splitNestedBriefItem(text) {
+      const item = cleanBriefItem(text);
+      const exampleMarker = item.match(/^(.+?)\s*\((examples?|e\.g\.):\s*(.+)\)\.?$/i);
+      if (exampleMarker) {
+        const children = splitOutsideParentheses(exampleMarker[3], ';').map(cleanBriefItem).filter(Boolean);
+        if (children.length > 1) return { text: cleanBriefItem(exampleMarker[1]), children };
+      }
+      const marker = item.match(/^(.+\binclude:)\s+(.+)$/i);
+      if (!marker) return { text: item, children: [] };
+      const children = splitOutsideParentheses(marker[2], ',')
+        .map(cleanBriefItem)
+        .map(value => value.replace(/^and\s+/i, ''))
+        .filter(Boolean);
+      return children.length > 1 ? { text: marker[1], children } : { text: item, children: [] };
+    }
+
+    function splitOutsideParentheses(text, delimiter) {
+      const parts = [];
+      let depth = 0;
+      let current = '';
+      for (const char of String(text || '')) {
+        if (char === '(') depth += 1;
+        if (char === ')') depth = Math.max(0, depth - 1);
+        if (char === delimiter && depth === 0) {
+          parts.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      parts.push(current);
+      return parts;
+    }
+
+    function cleanBriefItem(value) {
+      return String(value || '').trim().replace(/\s+/g, ' ').replace(/^[,.;:\s]+|[,;\s]+$/g, '');
+    }
+
+    function overviewBrief(summary) {
+      const text = String(summary || '').trim();
+      if (!text) return 'Your Twin currently contains limited evidence. The available evidence is not yet sufficient to produce a complete executive briefing.';
+      const lower = text.toLowerCase();
+      if (lower.startsWith('your twin currently contains') || lower.startsWith('the evidence currently contains') || lower.startsWith('the available evidence') || lower.startsWith('the strongest evidence') || lower.startsWith('there is currently')) return text;
+      const reportPrefixes = ['the cv documents ', 'the source documents ', 'the evidence shows ', 'the candidate '];
+      let mirrorText = text;
+      for (const prefix of reportPrefixes) {
+        if (lower.startsWith(prefix)) {
+          mirrorText = text.slice(prefix.length).trim();
+          break;
+        }
+      }
+      mirrorText = mirrorText.replace(/^I(?:'m|’m| am) reading (?:your )?(?:career|evidence) as\s+/i, 'The evidence suggests ');
+      mirrorText = mirrorText.replace(/^I(?:'m|’m| am) less certain about\s+/i, 'There is less clarity about ');
+      if (/^there is less clarity about/i.test(mirrorText)) return mirrorText;
+      mirrorText = mirrorText.replace(/^[A-Z][A-Za-z' -]+ shows /, '').replace(/^[A-Z][A-Za-z' -]+ has /, '');
+      const experiencedLeader = mirrorText.match(/^experienced (.+?) leader(.*)$/i);
+      if (experiencedLeader) {
+        mirrorText = `${experiencedLeader[1].toLowerCase()} leadership${experiencedLeader[2]}`;
+      } else if (/^experienced /i.test(mirrorText)) {
+        mirrorText = mirrorText.slice('experienced '.length);
+        mirrorText = `${mirrorText.charAt(0).toLowerCase()}${mirrorText.slice(1)}`;
+      } else {
+        mirrorText = `${mirrorText.charAt(0).toLowerCase()}${mirrorText.slice(1)}`;
+      }
+      return `The available evidence presents ${mirrorText}`;
+    }
+
+    function renderEducationTraining(twin) {
+      const facts = (twin.person?.facts || []).filter(fact => ['education', 'certification'].includes(fact.kind));
+      const cards = facts.map(fact => `<div class="block"><div class="block-label">${escapeHtml((fact.kind || 'fact').replaceAll('_', ' '))}${fact.extraction_confidence ? ` · ${Math.round(fact.extraction_confidence * 100)}% confidence` : ''}</div><div class="block-text">${escapeHtml(formatFactValue(fact.value))}</div>${fact.source_refs?.length ? `<div class="subtle" style="margin-top:7px">${fact.source_refs.length} supporting source reference${fact.source_refs.length === 1 ? '' : 's'}</div>` : ''}</div>`).join('');
+      return `<section><div class="eyebrow" style="margin-bottom:10px">This is my current understanding of your education and training</div>${cards || '<p class="subtle">No education or training facts have been identified yet.</p>'}</section>`;
+    }
+
+    function formatFactValue(value) {
+      if (Array.isArray(value)) return value.join(', ');
+      if (value && typeof value === 'object') return Object.entries(value).map(([key, val]) => `${key}: ${val}`).join(' · ');
+      return value ?? 'unknown';
     }
 
     function renderSaveCallout() {

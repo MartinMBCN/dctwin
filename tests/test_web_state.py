@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from http import HTTPStatus
 from pathlib import Path
@@ -447,6 +448,55 @@ def test_delete_account_requires_exact_confirmation(
     assert payload["status"] == "deleted"
     state = load_json(_account_file(tmp_path))
     assert state["users"] == []
+
+
+def test_timing_log_writes_jsonl_under_local_state(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+
+    path = web._write_timing_log(
+        operation="source_adaptation",
+        filename="cv.pdf",
+        source_id="src_123",
+        timings=[{"event": "model_call_completed", "elapsed_ms": 1234.5}],
+    )
+
+    assert path == tmp_path / web.SESSION_DIR / web.LOG_DIR / "timings.jsonl"
+    records = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert records == [
+        {
+            "created_at": records[0]["created_at"],
+            "operation": "source_adaptation",
+            "filename": "cv.pdf",
+            "source_id": "src_123",
+            "timings": [{"event": "model_call_completed", "elapsed_ms": 1234.5}],
+        }
+    ]
+
+
+def test_source_cache_uses_extraction_contract_version(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    source = {"content_hash": "sha256:abc123"}
+    candidate = {"twin_id": "twin_cached"}
+
+    web._save_cached_candidate(source, candidate)
+
+    assert web._cache_path(source).name == (
+        f"abc123.{web.CACHE_CONTRACT_VERSION}.candidate.json"
+    )
+    assert web._load_cached_candidate(source) == candidate
+
+    monkeypatch.setattr(web, "CACHE_CONTRACT_VERSION", "new_contract")
+    assert web._load_cached_candidate(source) is None
 
 
 def _sign_in_and_save_twin(

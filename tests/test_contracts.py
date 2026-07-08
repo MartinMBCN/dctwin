@@ -63,6 +63,13 @@ def test_unknown_evidence_reference_is_rejected(contracts: dict[str, dict]) -> N
         validate_twin(twin, contracts["twin_schema"], contracts["catalog"])
 
 
+def test_unknown_overview_brief_evidence_reference_is_rejected(contracts: dict[str, dict]) -> None:
+    twin = deepcopy(contracts["twin"])
+    twin["reflection"]["overview_brief_items"][0]["supporting_evidence_ids"] = ["ev_missing"]
+    with pytest.raises(ContractValidationError, match="overview brief item"):
+        validate_twin(twin, contracts["twin_schema"], contracts["catalog"])
+
+
 def test_unknown_tag_is_rejected(contracts: dict[str, dict]) -> None:
     twin = deepcopy(contracts["twin"])
     twin["evidence_items"][0]["tag_assignments"]["capabilities"][0]["tag_id"] = "tag_invented"

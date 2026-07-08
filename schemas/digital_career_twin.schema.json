@@ -54,6 +54,7 @@
     "evidenceId": { "type": "string", "pattern": "^ev_[a-zA-Z0-9_-]+$" },
     "factId": { "type": "string", "pattern": "^fact_[a-zA-Z0-9_-]+$" },
     "inferenceId": { "type": "string", "pattern": "^inf_[a-zA-Z0-9_-]+$" },
+    "briefItemId": { "type": "string", "pattern": "^brief_[a-zA-Z0-9_-]+$" },
     "gapId": { "type": "string", "pattern": "^gap_[a-zA-Z0-9_-]+$" },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
     "dateValue": {
@@ -248,7 +249,41 @@
         "summary": { "type": "string" },
         "strongly_supported": { "type": "array", "items": { "type": "string" } },
         "unclear": { "type": "array", "items": { "type": "string" } },
-        "suggested_questions": { "type": "array", "items": { "type": "string" } }
+        "suggested_questions": { "type": "array", "items": { "type": "string" } },
+        "overview_brief_items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/overviewBriefItem" }
+        }
+      }
+    },
+    "overviewBriefItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "section", "kind", "text", "salience", "confidence", "supporting_evidence_ids"],
+      "properties": {
+        "id": { "$ref": "#/$defs/briefItemId" },
+        "section": {
+          "type": "string",
+          "enum": [
+            "career_in_brief",
+            "patterns_and_structural_observations",
+            "areas_of_higher_confidence",
+            "areas_of_less_clarity",
+            "professionally_salient_attention_items",
+            "confidence_statement"
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["observation", "interpretation", "uncertainty", "attention_item", "confidence_statement"]
+        },
+        "text": { "type": "string", "minLength": 1 },
+        "salience": { "$ref": "#/$defs/confidence" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "supporting_evidence_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceId" }
+        }
       }
     }
   }

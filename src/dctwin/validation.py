@@ -148,6 +148,12 @@ def validate_twin(
             if evidence_id not in evidence:
                 issues.append(f"{owner}: unknown supporting evidence {evidence_id!r}")
 
+    for brief_item in twin.get("reflection", {}).get("overview_brief_items", []):
+        owner = f"overview brief item {brief_item.get('id')}"
+        for evidence_id in brief_item.get("supporting_evidence_ids", []):
+            if evidence_id not in evidence:
+                issues.append(f"{owner}: unknown supporting evidence {evidence_id!r}")
+
     for source in twin.get("sources", []):
         normalized = normalized_sources.get(source.get("id"))
         if normalized and source.get("content_hash") != normalized.get("content_hash"):

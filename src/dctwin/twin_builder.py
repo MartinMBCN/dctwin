@@ -72,11 +72,14 @@ def build_twin_from_extraction(
         )
 
     facts = []
+    fact_ids: set[str] = set()
     person_name = str(extraction.get("person_name") or "").strip()
     if person_name:
+        fact_id = _unique_id("fact", f"name {person_name}", fact_ids)
+        fact_ids.add(fact_id)
         facts.append(
             {
-                "id": _unique_id("fact", f"name {person_name}", set()),
+                "id": fact_id,
                 "kind": "name",
                 "value": person_name,
                 "extraction_confidence": 0.7,
@@ -87,6 +90,22 @@ def build_twin_from_extraction(
                         "quote": person_name,
                     }
                 ],
+            }
+        )
+    for item in extraction.get("education_training", []):
+        value = str(item.get("value") or "").strip()
+        kind = item.get("kind")
+        if not value or kind not in {"education", "certification"}:
+            continue
+        fact_id = _unique_id("fact", f"{kind} {value}", fact_ids)
+        fact_ids.add(fact_id)
+        facts.append(
+            {
+                "id": fact_id,
+                "kind": kind,
+                "value": value,
+                "extraction_confidence": _confidence(item.get("confidence"), default=0.7),
+                "source_refs": [_source_ref(source_id, item, source_document)],
             }
         )
 
@@ -314,10 +333,19 @@ def _reflection(
     summary = str(interpretation.get("reflection_summary") or "").strip()
     if not summary:
         summary = (
-            f"This staged extraction found {len(evidence_items)} achievement"
-            f"{'' if len(evidence_items) == 1 else 's'} across {role_count} role"
-            f"{'' if role_count == 1 else 's'}. A deeper interpretation is still needed."
+            f"Your Twin currently contains evidence for {role_count} professional role"
+            f"{'' if role_count == 1 else 's'} and {len(evidence_items)} achievement"
+            f"{'' if len(evidence_items) == 1 else 's'}. "
+            "The strongest available observations are not yet sufficient to produce a "
+            "complete executive briefing.\n\n"
+            "The available evidence provides less clarity about the broader career "
+            "trajectory, distinctive patterns and professionally salient attention "
+            "items.\n\n"
+            "This reflection is based on the evidence currently contained within your "
+            "Twin and will evolve as additional evidence is added or existing evidence "
+            "is refined."
         )
+    summary = _overview_brief(summary)
     patterns = [
         str(pattern.get("text") or "").strip()
         for pattern in interpretation.get("recurring_patterns", [])
@@ -338,7 +366,185 @@ def _reflection(
         "strongly_supported": patterns or [item["text"] for item in evidence_items[:5]],
         "unclear": unclear or fallback_unclear,
         "suggested_questions": unclear or fallback_unclear,
+        "overview_brief_items": _overview_brief_items(
+            interpretation=interpretation,
+            evidence_items=evidence_items,
+            gaps=gaps,
+            role_count=role_count,
+        ),
     }
+
+
+def _overview_brief_items(
+    *,
+    interpretation: dict[str, Any],
+    evidence_items: list[dict[str, Any]],
+    gaps: list[dict[str, Any]],
+    role_count: int,
+) -> list[dict[str, Any]]:
+    sections = {
+        "career_in_brief",
+        "patterns_and_structural_observations",
+        "areas_of_higher_confidence",
+        "areas_of_less_clarity",
+        "professionally_salient_attention_items",
+        "confidence_statement",
+    }
+    kinds = {"observation", "interpretation", "uncertainty", "attention_item", "confidence_statement"}
+    items: list[dict[str, Any]] = []
+    for raw in interpretation.get("overview_brief_items", []):
+        text = str(raw.get("text") or "").strip()
+        if not text:
+            continue
+        section = raw.get("section")
+        kind = raw.get("kind")
+        if section not in sections:
+            section = "patterns_and_structural_observations"
+        if kind not in kinds:
+            kind = "interpretation" if section == "patterns_and_structural_observations" else "observation"
+        support = _evidence_ids_for_indexes(
+            evidence_items,
+            raw.get("supporting_achievement_indexes", []),
+        )
+        items.append(
+            {
+                "id": _unique_id("brief", f"{section} {kind} {text}", {item["id"] for item in items}),
+                "section": section,
+                "kind": kind,
+                "text": text,
+                "salience": _confidence(raw.get("salience"), default=0.6),
+                "confidence": _confidence(raw.get("confidence"), default=0.6),
+                "supporting_evidence_ids": support,
+            }
+        )
+    if items:
+        return sorted(
+            items,
+            key=lambda item: (
+                _brief_section_order(item["section"]),
+                -item["salience"],
+                -item["confidence"],
+                item["text"],
+            ),
+        )
+
+    fallback: list[dict[str, Any]] = []
+    if role_count or evidence_items:
+        fallback.append(
+            {
+                "id": _unique_id("brief", f"career {role_count} {len(evidence_items)}", set()),
+                "section": "career_in_brief",
+                "kind": "observation",
+                "text": (
+                    f"The Twin currently contains evidence for {role_count} professional role"
+                    f"{'' if role_count == 1 else 's'} and {len(evidence_items)} achievement"
+                    f"{'' if len(evidence_items) == 1 else 's'}."
+                ),
+                "salience": 0.7,
+                "confidence": 0.7,
+                "supporting_evidence_ids": [item["id"] for item in evidence_items[:5]],
+            }
+        )
+    for gap in gaps:
+        question = str(gap.get("resolution_question") or "").strip()
+        if not question:
+            continue
+        fallback.append(
+            {
+                "id": _unique_id("brief", f"unclear {question}", {item["id"] for item in fallback}),
+                "section": "areas_of_less_clarity",
+                "kind": "uncertainty",
+                "text": question,
+                "salience": 0.55,
+                "confidence": 0.65,
+                "supporting_evidence_ids": [],
+            }
+        )
+    fallback.append(
+        {
+            "id": _unique_id("brief", "confidence current evidence", {item["id"] for item in fallback}),
+            "section": "confidence_statement",
+            "kind": "confidence_statement",
+            "text": "This reflection is based on the evidence currently contained within your Twin and will evolve as additional evidence is added or existing evidence is refined.",
+            "salience": 0.5,
+            "confidence": 0.8,
+            "supporting_evidence_ids": [item["id"] for item in evidence_items[:5]],
+        }
+    )
+    return fallback
+
+
+def _brief_section_order(section: str) -> int:
+    order = {
+        "career_in_brief": 0,
+        "patterns_and_structural_observations": 1,
+        "areas_of_higher_confidence": 2,
+        "areas_of_less_clarity": 3,
+        "professionally_salient_attention_items": 4,
+        "confidence_statement": 5,
+    }
+    return order.get(section, 99)
+
+
+def _overview_brief(summary: str) -> str:
+    text = summary.strip()
+    if not text:
+        return text
+    lower = text.lower()
+    briefing_starts = (
+        "your twin currently contains",
+        "the evidence currently contains",
+        "the available evidence",
+        "the strongest evidence",
+        "there is currently",
+    )
+    if lower.startswith(briefing_starts):
+        return text
+    report_starts = (
+        "the cv documents ",
+        "the source documents ",
+        "the evidence shows ",
+        "the candidate ",
+    )
+    for prefix in report_starts:
+        if lower.startswith(prefix):
+            text = text[len(prefix):].strip()
+            break
+    text = re.sub(
+        r"^I(?:'m|’m| am) reading (?:your )?(?:career|evidence) as\s+",
+        "The evidence suggests ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"^I(?:'m|’m| am) less certain about\s+",
+        "There is less clarity about ",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if text.lower().startswith("there is less clarity about"):
+        return text
+    name_match = re.match(r"^[A-Z][A-Za-z' -]+ shows (.+)$", text)
+    if name_match:
+        text = name_match.group(1).strip()
+    name_match = re.match(r"^[A-Z][A-Za-z' -]+ has (.+)$", text)
+    if name_match:
+        text = name_match.group(1).strip()
+    experienced_leader = re.match(r"^experienced (.+?) leader(.*)$", text, flags=re.IGNORECASE)
+    if experienced_leader:
+        text = (
+            f"{experienced_leader.group(1).lower()} leadership"
+            f"{experienced_leader.group(2)}"
+        )
+    elif text.lower().startswith("experienced "):
+        text = text[len("experienced "):]
+        text = f"{text[0].lower()}{text[1:]}" if text else text
+    elif text:
+        text = f"{text[0].lower()}{text[1:]}"
+    return f"The available evidence presents {text}"
+
+
+_mirror_summary = _overview_brief
 
 
 def _evidence_ids_for_indexes(

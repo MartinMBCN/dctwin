@@ -74,13 +74,17 @@ class ReconciliationAgent:
             "evidence_merged": 0,
             "possible_duplicates": 0,
         }
+        evidence_id_map: dict[str, str] = {}
 
         for item in candidate.get("evidence_items", []):
+            incoming_evidence_id = str(item.get("id") or "")
             if item.get("role_id") in role_map:
                 item["role_id"] = role_map[item["role_id"]]
             match = self._best_evidence_match(twin, item)
             if match is None:
                 self._add_unique("evidence_items", twin, item)
+                if incoming_evidence_id:
+                    evidence_id_map[incoming_evidence_id] = item["id"]
                 counts["evidence_added"] += 1
                 actions.append(
                     {
@@ -98,6 +102,8 @@ class ReconciliationAgent:
             if score >= self.exact_threshold:
                 self._merge_source_refs(existing_item, item)
                 self._merge_tag_assignments(existing_item, item)
+                if incoming_evidence_id:
+                    evidence_id_map[incoming_evidence_id] = existing_item["id"]
                 counts["evidence_merged"] += 1
                 actions.append(
                     {
@@ -121,6 +127,8 @@ class ReconciliationAgent:
                     {ev.get("id") for ev in twin.get("evidence_items", [])},
                 )
                 self._add_unique("evidence_items", twin, appended)
+                if incoming_evidence_id:
+                    evidence_id_map[incoming_evidence_id] = appended["id"]
                 counts["possible_duplicates"] += 1
                 actions.append(
                     {
@@ -136,6 +144,7 @@ class ReconciliationAgent:
 
         self._merge_person_facts(twin, candidate, actions)
         self._merge_gaps(twin, candidate)
+        self._remap_candidate_evidence_refs(candidate, evidence_id_map)
         self._merge_inferences(twin, candidate)
         self._refresh_reflection(twin, candidate)
         twin["generated_at"] = datetime.now(UTC).isoformat()
@@ -446,6 +455,24 @@ class ReconciliationAgent:
             existing_ids.add(inference.get("id"))
 
     @staticmethod
+    def _remap_candidate_evidence_refs(
+        candidate: dict[str, Any],
+        evidence_id_map: dict[str, str],
+    ) -> None:
+        if not evidence_id_map:
+            return
+        for inference in candidate.get("inferences", []):
+            inference["supporting_evidence_ids"] = [
+                evidence_id_map.get(evidence_id, evidence_id)
+                for evidence_id in inference.get("supporting_evidence_ids", [])
+            ]
+        for item in candidate.get("reflection", {}).get("overview_brief_items", []):
+            item["supporting_evidence_ids"] = [
+                evidence_id_map.get(evidence_id, evidence_id)
+                for evidence_id in item.get("supporting_evidence_ids", [])
+            ]
+
+    @staticmethod
     def _find_matching_inference(
         twin: dict[str, Any],
         incoming: dict[str, Any],
@@ -504,6 +531,10 @@ class ReconciliationAgent:
             "strongly_supported": supported,
             "unclear": unclear,
             "suggested_questions": unclear,
+            "overview_brief_items": _merge_overview_brief_items(
+                candidate_reflection.get("overview_brief_items", []),
+                existing_reflection.get("overview_brief_items", []),
+            ),
         }
 
     @staticmethod
@@ -705,6 +736,374 @@ def _merge_short_lists(*lists: list[str], limit: int) -> list[str]:
             if len(merged) >= limit:
                 return merged
     return merged
+
+
+def _merge_overview_brief_items(*lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    for items in lists:
+        for item in items or []:
+            item = _normalized_overview_brief_item(item)
+            if item is None:
+                continue
+            match = _find_similar_overview_brief_item(merged, item)
+            if match is None:
+                merged.append(deepcopy(item))
+                continue
+            existing = merged[match]
+            preferred_text = _preferred_short_text(
+                str(existing.get("text", "")),
+                str(item.get("text", "")),
+            )
+            existing["text"] = preferred_text
+            existing["salience"] = max(existing.get("salience", 0), item.get("salience", 0))
+            existing["confidence"] = max(existing.get("confidence", 0), item.get("confidence", 0))
+            existing["supporting_evidence_ids"] = list(dict.fromkeys([
+                *existing.get("supporting_evidence_ids", []),
+                *item.get("supporting_evidence_ids", []),
+            ]))
+    section_order = {
+        "career_in_brief": 0,
+        "patterns_and_structural_observations": 1,
+        "areas_of_higher_confidence": 2,
+        "areas_of_less_clarity": 3,
+        "professionally_salient_attention_items": 4,
+        "confidence_statement": 5,
+    }
+    return sorted(
+        merged,
+        key=lambda item: (
+            section_order.get(item.get("section"), 99),
+            -item.get("salience", 0),
+            -item.get("confidence", 0),
+            item.get("text", ""),
+        ),
+    )[:60]
+
+
+def _find_similar_overview_brief_item(
+    existing: list[dict[str, Any]],
+    incoming: dict[str, Any],
+) -> int | None:
+    incoming_section = incoming.get("section")
+    incoming_text = str(incoming.get("text") or "")
+    incoming_tokens = _meaningful_tokens(incoming_text)
+    incoming_metrics = _metrics(incoming_text)
+    for index, item in enumerate(existing):
+        if item.get("section") != incoming_section:
+            continue
+        existing_text = str(item.get("text") or "")
+        existing_tokens = _meaningful_tokens(existing_text)
+        shared = len(incoming_tokens & existing_tokens)
+        if shared < 3:
+            continue
+        token_score = _jaccard(incoming_tokens, existing_tokens)
+        containment = _containment(incoming_tokens, existing_tokens)
+        text_score = SequenceMatcher(
+            None,
+            _normalize(incoming_text),
+            _normalize(existing_text),
+        ).ratio()
+        shared_metrics = incoming_metrics & _metrics(existing_text)
+        if max(token_score, text_score) >= 0.54 or containment >= 0.48:
+            return index
+        if shared_metrics and (token_score >= 0.34 or containment >= 0.34):
+            return index
+        if incoming_section == "areas_of_less_clarity" and containment >= 0.42:
+            return index
+        if incoming_section == "confidence_statement" and _confidence_statement_overlap(
+            incoming_tokens, existing_tokens
+        ):
+            return index
+        if incoming_section == "areas_of_higher_confidence" and _capability_domain_overlap(
+            incoming_tokens, existing_tokens
+        ):
+            return index
+        if incoming_section == "career_in_brief" and _career_scope_overlap(
+            incoming_tokens, existing_tokens
+        ):
+            return index
+        if incoming_section == "areas_of_higher_confidence" and _outcome_domain_overlap(
+            incoming_text,
+            existing_text,
+            incoming_tokens,
+            existing_tokens,
+        ):
+            return index
+        if (
+            incoming_section == "professionally_salient_attention_items"
+            and _contract_transition_overlap(incoming_tokens, existing_tokens)
+        ):
+            return index
+    return None
+
+
+def _confidence_statement_overlap(left: set[str], right: set[str]) -> bool:
+    confidence_terms = {
+        "confidence",
+        "confid",
+        "direct",
+        "explicit",
+        "extract",
+        "fact",
+        "facts",
+        "metric",
+        "metrics",
+        "outcome",
+        "outcomes",
+        "project",
+        "projects",
+        "role",
+        "roles",
+        "source",
+        "support",
+        "supported",
+    }
+    return len((left & right) & confidence_terms) >= 3
+
+
+def _capability_domain_overlap(left: set[str], right: set[str]) -> bool:
+    capability_terms = {
+        "ai",
+        "automation",
+        "dashboard",
+        "dashboards",
+        "design",
+        "develop",
+        "development",
+        "framework",
+        "frameworks",
+        "grant",
+        "grants",
+        "health",
+        "healthcare",
+        "implement",
+        "implementation",
+        "kpi",
+        "kpis",
+        "mel",
+        "monitor",
+        "monitoring",
+        "operational",
+        "operationalizing",
+        "platform",
+        "program",
+        "programs",
+        "system",
+        "systems",
+        "theory",
+    }
+    shared_terms = (left & right) & capability_terms
+    return len(shared_terms) >= 2 and _containment(left & capability_terms, right & capability_terms) >= 0.4
+
+
+def _career_scope_overlap(left: set[str], right: set[str]) -> bool:
+    scope_terms = {
+        "career",
+        "role",
+        "roles",
+        "senior",
+        "technology",
+        "transformation",
+        "platform",
+        "leadership",
+        "industr",
+        "industry",
+        "industries",
+        "geograph",
+        "geographies",
+        "financial",
+        "services",
+        "retail",
+        "consult",
+        "consulting",
+        "life",
+        "science",
+        "sciences",
+    }
+    shared_scope = (left & right) & scope_terms
+    return len(shared_scope) >= 4 and (
+        ("career" in left and "career" in right)
+        or ("role" in left and "role" in right)
+        or ("roles" in left and "roles" in right)
+    )
+
+
+def _outcome_domain_overlap(
+    left_text: str,
+    right_text: str,
+    left: set[str],
+    right: set[str],
+) -> bool:
+    outcome_terms = {
+        "adoption",
+        "cost",
+        "failure",
+        "financial",
+        "impact",
+        "metric",
+        "metrics",
+        "operational",
+        "outcome",
+        "outcomes",
+        "quantified",
+        "reduction",
+        "reductions",
+        "reliability",
+        "release",
+        "revenue",
+        "roi",
+        "saving",
+        "savings",
+        "throughput",
+        "velocity",
+    }
+    shared_outcomes = (left & right) & outcome_terms
+    shared_metrics = _metrics(left_text) & _metrics(right_text)
+    return len(shared_outcomes) >= 2 and (
+        len(shared_metrics) >= 1 or _containment(left & outcome_terms, right & outcome_terms) >= 0.4
+    )
+
+
+def _contract_transition_overlap(left: set[str], right: set[str]) -> bool:
+    contract_terms = {"contract", "contracts", "consult", "consultancy", "consulting", "interim"}
+    transition_terms = {
+        "duration",
+        "engagement",
+        "engagements",
+        "frequent",
+        "medium",
+        "multiple",
+        "permanent",
+        "placement",
+        "preference",
+        "reflect",
+        "short",
+        "transition",
+        "transitions",
+    }
+    return (
+        bool(left & contract_terms)
+        and bool(right & contract_terms)
+        and bool(left & transition_terms)
+        and bool(right & transition_terms)
+    )
+
+
+def _normalized_overview_brief_item(item: dict[str, Any]) -> dict[str, Any] | None:
+    text = str(item.get("text") or "").strip()
+    if not text:
+        return None
+    normalized = deepcopy(item)
+    normalized["text"] = text
+    lower = text.lower()
+    tokens = _meaningful_tokens(text)
+    if _is_logistical_cv_gap(lower):
+        return None
+    if _is_quantified_outcome_item(text, tokens):
+        normalized["section"] = "areas_of_higher_confidence"
+    elif _is_contract_transition_attention_item(tokens):
+        normalized["section"] = "professionally_salient_attention_items"
+    elif _is_uncertainty_item(lower, tokens):
+        normalized["section"] = "areas_of_less_clarity"
+    elif _is_governance_operating_model_pattern(tokens):
+        normalized["section"] = "patterns_and_structural_observations"
+    elif _is_team_or_leadership_pattern(tokens):
+        normalized["section"] = "patterns_and_structural_observations"
+    return normalized
+
+
+def _is_logistical_cv_gap(text: str) -> bool:
+    logistical_terms = (
+        "availability",
+        "notice period",
+        "reason for end",
+        "reason for short",
+        "reason for six-month",
+        "reason for 6-month",
+        "ongoing availability",
+        "handoff",
+        "hand-off",
+        "long-term ownership",
+        "longer-term impact",
+        "post-engagement",
+        "retention outcome",
+        "retention outcomes",
+        "retained vs pure-contract",
+    )
+    return any(term in text for term in logistical_terms)
+
+
+def _is_quantified_outcome_item(text: str, tokens: set[str]) -> bool:
+    outcome_terms = {
+        "adoption",
+        "automation",
+        "cost",
+        "costs",
+        "failure",
+        "financial",
+        "metric",
+        "metrics",
+        "operational",
+        "outcome",
+        "outcomes",
+        "reduction",
+        "reductions",
+        "reliability",
+        "release",
+        "revenue",
+        "roi",
+        "saving",
+        "savings",
+        "throughput",
+    }
+    return bool(_metrics(text)) and bool(tokens & outcome_terms)
+
+
+def _is_contract_transition_attention_item(tokens: set[str]) -> bool:
+    contract_terms = {"contract", "contracts", "consult", "consultancy", "consulting", "interim"}
+    attention_terms = {
+        "availability",
+        "clarify",
+        "engagement",
+        "engagements",
+        "frequent",
+        "multiple",
+        "permanent",
+        "preference",
+        "short",
+        "transition",
+        "transitions",
+    }
+    return bool(tokens & contract_terms) and bool(tokens & attention_terms)
+
+
+def _is_uncertainty_item(text: str, tokens: set[str]) -> bool:
+    uncertainty_phrases = (
+        "limited explicit detail",
+        "limited public detail",
+        "not fully quantified",
+        "not fully enumerated",
+        "not explicit",
+        "not described",
+        "unclear",
+    )
+    uncertainty_terms = {"detail", "explicit", "limited", "unclear", "quantified"}
+    scope_terms = {"p&l", "reporting", "line", "lines", "direct", "management", "headcount", "scope"}
+    return any(phrase in text for phrase in uncertainty_phrases) or (
+        bool(tokens & uncertainty_terms) and bool(tokens & scope_terms)
+    )
+
+
+def _is_governance_operating_model_pattern(tokens: set[str]) -> bool:
+    governance_terms = {"governance", "operating", "model", "models", "regulated"}
+    delivery_terms = {"design", "implement", "implementation", "organization", "organizations", "organisation", "organisations"}
+    return bool(tokens & governance_terms) and bool(tokens & delivery_terms)
+
+
+def _is_team_or_leadership_pattern(tokens: set[str]) -> bool:
+    team_terms = {"headcount", "leadership", "management", "managerial", "organization", "organisations", "restructur", "team", "teams"}
+    scale_terms = {"direct", "distributed", "line", "matrix", "multi", "multinational", "reorganiz", "scale", "scaling", "scope"}
+    return bool(tokens & team_terms) and bool(tokens & scale_terms)
 
 
 def _find_similar_short_text(existing: list[str], incoming: str) -> int | None:
