@@ -15,12 +15,14 @@ def test_reset_session_clears_session_and_cache(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    monkeypatch.setenv("DCTWIN_STATE_DIR", str(tmp_path / "persistent_state"))
     state_dir = tmp_path / web.SESSION_DIR
     session_file = state_dir / web.SESSION_FILE
     cache_file = state_dir / web.CACHE_DIR / "source.candidate.json"
-    account_file = state_dir / web.ACCOUNT_FILE
+    account_file = _account_file(tmp_path)
     session_file.parent.mkdir(parents=True)
     cache_file.parent.mkdir(parents=True)
+    account_file.parent.mkdir(parents=True)
     session_file.write_text("{}", encoding="utf-8")
     cache_file.write_text("{}", encoding="utf-8")
     account_file.write_text("{}", encoding="utf-8")
@@ -30,6 +32,28 @@ def test_reset_session_clears_session_and_cache(
     assert not session_file.exists()
     assert not cache_file.exists()
     assert account_file.exists()
+
+
+def test_account_repository_uses_stable_state_dir(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path / "checkout_a")
+    monkeypatch.setenv("DCTWIN_STATE_DIR", str(tmp_path / "persistent_state"))
+
+    repo = web._account_repository()
+    delivery = repo.request_login_code(
+        email="user@example.com",
+        ip_address="127.0.0.1",
+    )
+    repo.verify_login_code(email="user@example.com", code=delivery.code)
+
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path / "checkout_b")
+
+    assert web._account_repository().get_user_by_email(email="user@example.com")
+    assert not (tmp_path / "checkout_a" / web.SESSION_DIR / web.ACCOUNT_FILE).exists()
+    assert not (tmp_path / "checkout_b" / web.SESSION_DIR / web.ACCOUNT_FILE).exists()
+    assert (tmp_path / "persistent_state" / web.ACCOUNT_FILE).exists()
 
 
 def test_health_payload_exposes_semver_app_version() -> None:
@@ -73,6 +97,7 @@ def test_verify_code_promotes_session_twin_and_creates_auth_session(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    monkeypatch.setenv("DCTWIN_STATE_DIR", str(tmp_path / "persistent_state"))
     web._save_session(
         {
             "twin": {"schema_version": "0.2.0", "twin_id": "twin_session"},
@@ -105,7 +130,7 @@ def test_verify_code_promotes_session_twin_and_creates_auth_session(
     assert auth_session["account"]["login_count"] == 1
     assert auth_session["account"]["last_twin_saved_at"]
 
-    state = load_json(tmp_path / web.SESSION_DIR / web.ACCOUNT_FILE)
+    state = load_json(_account_file(tmp_path))
     assert state["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_session"
 
 
@@ -128,7 +153,7 @@ def test_logout_clears_session_and_cache_but_preserves_account(
     }
     assert not (tmp_path / web.SESSION_DIR / web.SESSION_FILE).exists()
     assert not cache_file.exists()
-    state = load_json(tmp_path / web.SESSION_DIR / web.ACCOUNT_FILE)
+    state = load_json(_account_file(tmp_path))
     assert state["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_saved"
     assert web._auth_session_payload(session_id)["authenticated"] is False
 
@@ -152,6 +177,7 @@ def test_sign_in_requires_existing_saved_twin(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    monkeypatch.setenv("DCTWIN_STATE_DIR", str(tmp_path / "persistent_state"))
     repo = web._account_repository()
     delivery = repo.request_login_code(
         email="empty@example.com",
@@ -242,7 +268,7 @@ def test_authenticated_session_update_saves_persistent_twin(
 
     assert record is not None
     assert record["twin"]["twin_id"] == "twin_updated"
-    state = load_json(tmp_path / web.SESSION_DIR / web.ACCOUNT_FILE)
+    state = load_json(_account_file(tmp_path))
     assert state["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_updated"
     assert state["users"][0]["persistent_twin"]["source_documents"] == [
         {"source_id": "src_updated"}
@@ -337,7 +363,7 @@ def test_delete_account_requires_exact_confirmation(
     )
     assert status == HTTPStatus.OK
     assert payload["status"] == "deleted"
-    state = load_json(tmp_path / web.SESSION_DIR / web.ACCOUNT_FILE)
+    state = load_json(_account_file(tmp_path))
     assert state["users"] == []
 
 
@@ -348,6 +374,7 @@ def _sign_in_and_save_twin(
     twin_id: str,
 ) -> str:
     monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    monkeypatch.setenv("DCTWIN_STATE_DIR", str(tmp_path / "persistent_state"))
     web._save_session(
         {
             "twin": {"schema_version": "0.2.0", "twin_id": twin_id},
@@ -367,3 +394,7 @@ def _sign_in_and_save_twin(
     )
     assert status == HTTPStatus.OK
     return payload["session"]["id"]
+
+
+def _account_file(tmp_path: Path) -> Path:
+    return tmp_path / "persistent_state" / web.ACCOUNT_FILE

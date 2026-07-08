@@ -75,8 +75,15 @@ def _local_state_path() -> Path:
     return _project_root() / SESSION_DIR
 
 
+def _persistent_state_path() -> Path:
+    configured = os.environ.get("DCTWIN_STATE_DIR")
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".dctwin"
+
+
 def _account_repository() -> LocalAccountRepository:
-    return LocalAccountRepository(_local_state_path() / ACCOUNT_FILE)
+    return LocalAccountRepository(_persistent_state_path() / ACCOUNT_FILE)
 
 
 def _load_session() -> dict[str, Any]:

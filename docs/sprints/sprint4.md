@@ -136,6 +136,12 @@ Started locally:
   - the account dialog displays account creation date, last login, login count, last DCT change and current session expiry;
   - account deletion is available from the signed-in account dialog as "Delete my DCT";
   - regression coverage confirms Persistent Twins survive app version changes.
+- Added Sprint 4 persistence hardening through `0.2.9`:
+  - Persistent Twin/account JSON is stored in a stable local state directory rather than the repository working tree;
+  - `DCTWIN_STATE_DIR` can override the local state location;
+  - default local account path is `~/.dctwin/accounts.json`;
+  - Session Twin and source cache remain repository-local and disposable;
+  - regression coverage confirms account storage survives checkout/project-root changes.
 
 Agreed UX copy:
 
