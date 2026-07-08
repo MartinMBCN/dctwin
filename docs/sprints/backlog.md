@@ -52,3 +52,11 @@ Surface a gentle prompt: “This is saved, but could be strengthened. What chang
 Offer optional improvement, not silent mutation.
 Keep original text as source quote.
 Store any improved wording as a derived/refined evidence text with provenance back to the original.
+
+**Backlog item: Credential/session protection must be hardened before production.** 
+Specifically:
+real email delivery instead of displayed local codes
+secure, HttpOnly, SameSite cookies instead of localStorage session token
+HTTPS-only transport
+CSRF/session-rotation considerations
+audit logging for account access and destructive actions
