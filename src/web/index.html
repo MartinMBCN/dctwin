@@ -558,15 +558,16 @@
       const duration = document.querySelector('#auth-duration').value;
       const timezone = document.querySelector('#auth-timezone').value || 'UTC';
       state.authEmail = email;
+      const knownAccount = localStorage.getItem(KNOWN_ACCOUNT_KEY) === '1';
+      const purpose = knownAccount && !state.result ? 'sign_in' : 'create_account';
       const response = await apiFetch('/api/auth/request-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, purpose })
       });
       const payload = await response.json();
       if (!response.ok) return notify(payload.error || 'Could not request code');
-      const knownAccount = localStorage.getItem(KNOWN_ACCOUNT_KEY) === '1';
-      state.pendingCode = { ...payload, duration, timezone, flow: knownAccount && !state.result ? 'sign_in' : 'save' };
+      state.pendingCode = { ...payload, duration, timezone, flow: purpose === 'sign_in' ? 'sign_in' : 'save' };
       state.accountMode = 'code_sent';
       renderAccountModal();
     }
@@ -581,7 +582,8 @@
           email: state.pendingCode.email,
           code,
           duration: state.pendingCode.duration,
-          timezone: state.pendingCode.timezone
+          timezone: state.pendingCode.timezone,
+          purpose: state.pendingCode.purpose
         })
       });
       const payload = await response.json();

@@ -124,6 +124,7 @@ class LocalAccountRepository:
         *,
         email: str,
         code: str,
+        create_user: bool = True,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         state = self._load()
@@ -142,6 +143,8 @@ class LocalAccountRepository:
         latest["used_at"] = current.isoformat()
         user = self._user_for_email(state, normalized_email)
         if user is None:
+            if not create_user:
+                raise ValueError("No saved Digital Career Twin was found for this email")
             user = {
                 "id": _stable_id("usr", normalized_email),
                 "email": normalized_email,
@@ -151,6 +154,11 @@ class LocalAccountRepository:
             state.setdefault("users", []).append(user)
         self._save(state)
         return user
+
+    def get_user_by_email(self, *, email: str) -> dict[str, Any] | None:
+        state = self._load()
+        user = self._user_for_email(state, normalize_email(email))
+        return None if user is None else dict(user)
 
     def create_session(
         self,

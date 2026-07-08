@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from dctwin import __version__
 from dctwin.adapters import AdapterRegistry, DocxCvAdapter, PdfCvAdapter, adapt_cv_text
 from dctwin.agent import SourceAdapterAgent
-from dctwin.auth import LocalAccountRepository, collect_email_candidates
+from dctwin.auth import LocalAccountRepository, collect_email_candidates, normalize_email
 from dctwin.foundry import FoundryExtractionTwinProvider, FoundryTwinProvider
 from dctwin.io import load_json, write_json
 from dctwin.reconciliation import ReconciliationAgent
@@ -138,9 +138,23 @@ def _request_code_payload(
     *,
     email: str,
     ip_address: str,
+    purpose: str = "create_account",
 ) -> dict[str, Any]:
-    delivery = _account_repository().request_login_code(
-        email=email,
+    repo = _account_repository()
+    normalized_email = normalize_email(email)
+    if purpose == "sign_in":
+        user = repo.get_user_by_email(email=normalized_email)
+        persistent = repo.load_persistent_twin(user_id=user["id"]) if user else None
+        if persistent is None:
+            raise ValueError("No saved Digital Career Twin was found for this email")
+    elif purpose == "create_account":
+        if not _load_session().get("twin"):
+            raise ValueError("Create a Digital Career Twin before creating an account")
+    else:
+        raise ValueError("Choose create_account or sign_in")
+
+    delivery = repo.request_login_code(
+        email=normalized_email,
         ip_address=ip_address,
     )
     return {
@@ -148,6 +162,7 @@ def _request_code_payload(
         "expires_at": delivery.expires_at,
         "delivery_mode": delivery.delivery_mode,
         "simulated_code": delivery.code,
+        "purpose": purpose,
     }
 
 
@@ -157,10 +172,21 @@ def _verify_code_payload(
     code: str,
     duration: str,
     timezone: str,
+    purpose: str = "create_account",
     merge_strategy: str | None = None,
 ) -> tuple[HTTPStatus, dict[str, Any]]:
+    if purpose == "create_account" and not _load_session().get("twin"):
+        raise ValueError("Create a Digital Career Twin before creating an account")
+    if purpose not in {"create_account", "sign_in"}:
+        raise ValueError("Choose create_account or sign_in")
     repo = _account_repository()
-    user = repo.verify_login_code(email=email, code=code)
+    user = repo.verify_login_code(
+        email=email,
+        code=code,
+        create_user=purpose == "create_account",
+    )
+    if purpose == "sign_in" and repo.load_persistent_twin(user_id=user["id"]) is None:
+        raise ValueError("No saved Digital Career Twin was found for this email")
     auth_session = repo.create_session(
         user_id=user["id"],
         duration=_session_duration(duration),
@@ -486,6 +512,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                 _request_code_payload(
                     email=str(payload.get("email", "")),
                     ip_address=self._client_ip(),
+                    purpose=str(payload.get("purpose", "create_account")),
                 ),
             )
         except Exception as exc:
@@ -502,6 +529,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                 code=str(payload.get("code", "")),
                 duration=str(payload.get("duration", "7_days")),
                 timezone=str(payload.get("timezone", "UTC")),
+                purpose=str(payload.get("purpose", "create_account")),
                 merge_strategy=payload.get("merge_strategy"),
             )
             self._send_json(status, response)

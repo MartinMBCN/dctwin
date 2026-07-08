@@ -4,6 +4,8 @@ import re
 from http import HTTPStatus
 from pathlib import Path
 
+import pytest
+
 from dctwin import web
 from dctwin.io import load_json
 
@@ -127,28 +129,65 @@ def test_logout_clears_session_and_cache_but_preserves_account(
     assert web._auth_session_payload(session_id)["authenticated"] is False
 
 
-def test_sign_in_to_account_without_saved_twin_is_explicit(
+def test_create_account_requires_session_twin(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
-    delivery = web._request_code_payload(
+
+    with pytest.raises(ValueError, match="Create a Digital Career Twin"):
+        web._request_code_payload(
+            email="empty@example.com",
+            ip_address="127.0.0.1",
+            purpose="create_account",
+        )
+
+
+def test_sign_in_requires_existing_saved_twin(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    repo = web._account_repository()
+    delivery = repo.request_login_code(
         email="empty@example.com",
         ip_address="127.0.0.1",
     )
+    repo.verify_login_code(email="empty@example.com", code=delivery.code)
+
+    with pytest.raises(ValueError, match="No saved Digital Career Twin"):
+        web._request_code_payload(
+            email="empty@example.com",
+            ip_address="127.0.0.1",
+            purpose="sign_in",
+        )
+
+
+def test_sign_in_loads_existing_saved_twin(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    session_id = _sign_in_and_save_twin(monkeypatch, tmp_path, twin_id="twin_saved")
+    web._logout_payload(session_id)
+    delivery = web._request_code_payload(
+        email="user@example.com",
+        ip_address="127.0.0.1",
+        purpose="sign_in",
+    )
 
     status, payload = web._verify_code_payload(
-        email="empty@example.com",
+        email="user@example.com",
         code=delivery["simulated_code"],
         duration="7_days",
         timezone="Europe/Madrid",
+        purpose="sign_in",
     )
 
     assert status == HTTPStatus.OK
     assert payload["authenticated"] is True
-    assert payload["has_persistent_twin"] is False
-    assert payload["persistent_twin_saved_at"] is None
-    assert web._auth_session_payload(payload["session"]["id"])["has_persistent_twin"] is False
+    assert payload["has_persistent_twin"] is True
+    assert web._load_session()["twin"]["twin_id"] == "twin_saved"
 
 
 def test_verify_code_requires_merge_decision_for_existing_persistent_twin(
