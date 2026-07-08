@@ -190,6 +190,36 @@ def test_sign_in_loads_existing_saved_twin(
     assert web._load_session()["twin"]["twin_id"] == "twin_saved"
 
 
+def test_persistent_twin_survives_app_version_change(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    monkeypatch.setattr(web, "__version__", "0.2.6")
+    session_id = _sign_in_and_save_twin(monkeypatch, tmp_path, twin_id="twin_saved")
+    assert web._health_payload()["app_version"] == "0.2.6"
+    web._logout_payload(session_id)
+
+    monkeypatch.setattr(web, "__version__", "0.2.7")
+    delivery = web._request_code_payload(
+        email="user@example.com",
+        ip_address="127.0.0.1",
+        purpose="sign_in",
+    )
+    status, payload = web._verify_code_payload(
+        email="user@example.com",
+        code=delivery["simulated_code"],
+        duration="7_days",
+        timezone="Europe/Madrid",
+        purpose="sign_in",
+    )
+
+    assert web._health_payload()["app_version"] == "0.2.7"
+    assert status == HTTPStatus.OK
+    assert payload["has_persistent_twin"] is True
+    assert web._load_session()["twin"]["twin_id"] == "twin_saved"
+
+
 def test_verify_code_requires_merge_decision_for_existing_persistent_twin(
     monkeypatch,
     tmp_path: Path,
