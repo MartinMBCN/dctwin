@@ -516,7 +516,7 @@
         const expires = formatDateTime(state.auth.session?.expires_at);
         setAccountHeading('Your Digital Career Twin is saved', 'You are signed in and this Twin can be reloaded later.');
         const savedAt = state.auth.persistent_twin_saved_at ? `<div class="subtle" style="margin-top:6px">Last saved ${escapeHtml(formatDateTime(state.auth.persistent_twin_saved_at))}.</div>` : '';
-        accountBody.innerHTML = `<div class="status-card"><strong>Signed in as ${escapeHtml(state.auth.user.email)}</strong>Your session expires ${escapeHtml(expires)}.${savedAt}</div><div class="account-actions"><button class="button secondary" onclick="logout()">Log out</button><button class="button danger" onclick="confirmDeleteAccount()">Delete my digital twin</button></div>`;
+        accountBody.innerHTML = `<div class="status-card"><strong>Signed in as ${escapeHtml(state.auth.user.email)}</strong>Your session expires ${escapeHtml(expires)}.${savedAt}</div><div class="account-actions"><button class="button secondary" onclick="logout()">Log out</button><button class="button" onclick="closeAccountModal()">Continue</button></div>`;
         return;
       }
       if (state.mergeDecision) {
@@ -527,7 +527,10 @@
       if (state.pendingCode) {
         const signInOnly = state.pendingCode.flow === 'sign_in';
         setAccountHeading(signInOnly ? 'Enter your sign-in code' : 'Enter your verification code', signInOnly ? 'This confirms your email address and reloads your saved Twin.' : 'This confirms the email address that will be used to save your Twin.');
-        accountBody.innerHTML = `<div class="status-card"><strong>Code sent to ${escapeHtml(state.pendingCode.email)}</strong><div class="auth-code">${escapeHtml(state.pendingCode.simulated_code)}</div><div class="subtle">Local development mode shows the code here. In production this would arrive by email.</div></div><div class="field"><label for="auth-code">Verification code</label><input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></div><div class="account-actions"><button class="button" onclick="verifyCode()">${signInOnly ? 'Sign in' : 'Verify and save Twin'}</button><button class="button secondary" onclick="backToAccountStart()">Use a different email</button></div>`;
+        const secondaryAction = signInOnly
+          ? '<button class="button secondary" onclick="closeAccountModal()">Cancel</button>'
+          : '<button class="button secondary" onclick="backToAccountStart()">Use a different email</button>';
+        accountBody.innerHTML = `<div class="status-card"><strong>Code sent to ${escapeHtml(state.pendingCode.email)}</strong><div class="auth-code">${escapeHtml(state.pendingCode.simulated_code)}</div><div class="subtle">Local development mode shows the code here. In production this would arrive by email.</div></div><div class="field"><label for="auth-code">Verification code</label><input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></div><div class="account-actions"><button class="button" onclick="verifyCode()">${signInOnly ? 'Sign in' : 'Verify and save Twin'}</button>${secondaryAction}</div>`;
         return;
       }
       const knownAccount = localStorage.getItem(KNOWN_ACCOUNT_KEY) === '1';
@@ -536,7 +539,7 @@
         knownAccount ? 'Enter your email to receive a one-time verification code.' : 'Create an account with a verified email address.'
       );
       const options = state.authCandidates.map(email => `<option value="${escapeAttr(email)}">${escapeHtml(email)}</option>`).join('');
-      const candidateSelect = state.authCandidates.length
+      const candidateSelect = !knownAccount && state.authCandidates.length
         ? `<div class="field"><label for="auth-email-select">Email detected in your sources</label><select id="auth-email-select"><option value="">Choose detected email…</option>${options}</select></div>`
         : '';
       accountBody.innerHTML = `${candidateSelect}<div class="field"><label for="auth-email">Email address</label><input id="auth-email" type="text" value="${escapeAttr(state.authEmail)}" placeholder="you@example.com"></div><div class="auth-row"><div class="field"><label for="auth-duration">Log me out</label><select id="auth-duration"><option value="midnight">At midnight</option><option value="7_days" selected>In 7 days</option><option value="1_month">In 1 month</option></select></div><div class="field"><label for="auth-timezone">Timezone</label><input id="auth-timezone" type="text" value="${escapeAttr(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')}"></div></div><div class="account-actions"><button class="button" onclick="requestCode()">${knownAccount ? 'Send sign-in code' : 'Send verification code'}</button><button class="button secondary" onclick="closeAccountModal()">Cancel</button></div>`;
@@ -589,7 +592,11 @@
       state.pendingCode = null;
       state.accountMode = 'signed_in';
       await loadState();
-      renderAccountModal();
+      if (verifiedFlow === 'sign_in') {
+        closeAccountModal();
+      } else {
+        renderAccountModal();
+      }
       notify(verifiedFlow === 'sign_in' ? 'Signed in' : 'Digital Career Twin saved');
     }
 
