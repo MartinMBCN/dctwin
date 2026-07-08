@@ -215,6 +215,7 @@ def _auth_session_payload(session_id: str | None) -> dict[str, Any]:
         "authenticated": True,
         "session": _public_auth_session(auth_session),
         "user": _public_user(user),
+        "account": repo.account_metadata(user_id=user["id"]),
         "has_persistent_twin": persistent is not None,
         "persistent_twin_saved_at": persistent.get("saved_at") if persistent else None,
     }
@@ -319,9 +320,31 @@ def _post_auth_payload(
         "authenticated": True,
         "session": _public_auth_session(auth_session),
         "user": _public_user(user),
+        "account": repo.account_metadata(user_id=user["id"]),
         "has_persistent_twin": record is not None,
         "persistent_twin_saved_at": record.get("saved_at") if record else None,
     }
+
+
+def _save_authenticated_session_twin(session_id: str | None) -> dict[str, Any] | None:
+    if not session_id:
+        return None
+    repo = _account_repository()
+    auth_session = repo.get_session(session_id)
+    if auth_session is None:
+        return None
+    user = repo.get_user(user_id=auth_session["user_id"])
+    if user is None:
+        return None
+    local_session = _load_session()
+    if not local_session.get("twin"):
+        return None
+    return repo.save_persistent_twin(
+        user_id=user["id"],
+        twin=local_session["twin"],
+        source_documents=local_session.get("source_documents", []),
+        enrollment_documents=local_session.get("enrollment_documents", []),
+    )
 
 
 def _persistent_record_from_session(
@@ -700,7 +723,15 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             _timing_mark(timings, "mirror_rendered", started)
             session["twin"] = updated
             session["source_documents"] = source_documents
+            session.setdefault("enrollment_documents", []).append(
+                {
+                    "schema_version": "0.1.0",
+                    "source_id": source_doc["source_id"],
+                    "candidates": [],
+                }
+            )
             _save_session(session)
+            _save_authenticated_session_twin(self._auth_session_id())
             self._send_json(
                 HTTPStatus.OK,
                 self._response_payload(
@@ -784,6 +815,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
         session["source_documents"] = source_documents
         session.setdefault("enrollment_documents", []).append(enrollment_document)
         _save_session(session)
+        _save_authenticated_session_twin(self._auth_session_id())
         return self._response_payload(
             source_document=source_document,
             enrollment_document=enrollment_document,

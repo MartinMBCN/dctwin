@@ -213,6 +213,28 @@ class LocalAccountRepository:
         user = self._user_for_id(state, user_id)
         return None if user is None else dict(user)
 
+    def account_metadata(self, *, user_id: str) -> dict[str, Any]:
+        state = self._load()
+        user = self._user_for_id(state, user_id)
+        if user is None:
+            raise ValueError(f"Unknown user_id {user_id!r}")
+        user_sessions = [
+            session
+            for session in state.get("sessions", [])
+            if session.get("user_id") == user_id
+        ]
+        last_login_at = max(
+            (session.get("created_at") for session in user_sessions),
+            default=None,
+        )
+        persistent = user.get("persistent_twin")
+        return {
+            "created_at": user.get("created_at"),
+            "last_login_at": last_login_at,
+            "login_count": len(user_sessions),
+            "last_twin_saved_at": persistent.get("saved_at") if persistent else None,
+        }
+
     def revoke_session(
         self,
         session_id: str,

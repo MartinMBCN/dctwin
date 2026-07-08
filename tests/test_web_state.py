@@ -100,6 +100,10 @@ def test_verify_code_promotes_session_twin_and_creates_auth_session(
     assert auth_session["authenticated"] is True
     assert auth_session["has_persistent_twin"] is True
     assert auth_session["persistent_twin_saved_at"]
+    assert auth_session["account"]["created_at"]
+    assert auth_session["account"]["last_login_at"]
+    assert auth_session["account"]["login_count"] == 1
+    assert auth_session["account"]["last_twin_saved_at"]
 
     state = load_json(tmp_path / web.SESSION_DIR / web.ACCOUNT_FILE)
     assert state["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_session"
@@ -218,6 +222,31 @@ def test_persistent_twin_survives_app_version_change(
     assert status == HTTPStatus.OK
     assert payload["has_persistent_twin"] is True
     assert web._load_session()["twin"]["twin_id"] == "twin_saved"
+
+
+def test_authenticated_session_update_saves_persistent_twin(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(web, "_project_root", lambda: tmp_path)
+    session_id = _sign_in_and_save_twin(monkeypatch, tmp_path, twin_id="twin_saved")
+    web._save_session(
+        {
+            "twin": {"schema_version": "0.2.0", "twin_id": "twin_updated"},
+            "source_documents": [{"source_id": "src_updated"}],
+            "enrollment_documents": [{"source_id": "src_updated", "candidates": []}],
+        }
+    )
+
+    record = web._save_authenticated_session_twin(session_id)
+
+    assert record is not None
+    assert record["twin"]["twin_id"] == "twin_updated"
+    state = load_json(tmp_path / web.SESSION_DIR / web.ACCOUNT_FILE)
+    assert state["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_updated"
+    assert state["users"][0]["persistent_twin"]["source_documents"] == [
+        {"source_id": "src_updated"}
+    ]
 
 
 def test_verify_code_requires_merge_decision_for_existing_persistent_twin(

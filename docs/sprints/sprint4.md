@@ -129,6 +129,13 @@ Started locally:
   - logout;
   - account deletion confirmation;
   - browser leave warning while an unsaved Session Twin exists.
+- Added Sprint 4 acceptance hardening through `0.2.8`:
+  - account creation requires a current Session Twin;
+  - sign-in requires an existing saved Persistent Twin;
+  - signed-in CV uploads, pasted CVs and added achievements immediately save the updated Session Twin back to the user's Persistent Twin;
+  - the account dialog displays account creation date, last login, login count, last DCT change and current session expiry;
+  - account deletion is available from the signed-in account dialog as "Delete my DCT";
+  - regression coverage confirms Persistent Twins survive app version changes.
 
 Agreed UX copy:
 
@@ -146,6 +153,5 @@ Post-first-CV callout:
 
 Still pending:
 
-- Exercise the account UI end-to-end locally with a real Session Twin.
 - Decide whether to add optional real email delivery through a lightweight system mail path.
 - Add any necessary UI polish after acceptance testing.
