@@ -21,17 +21,19 @@ update the Twin accordingly.
 
 **Architectural Position**
 Twin
-    ↓
+  ↓
 Knowledge Acquisition Agent
-    ↓
+  ↓
 Interaction
-    ↓
+  ↓
 Knowledge Interpretation
-    ↓
-Twin Mapper / Reconciliation
-    ↓
+  ↓
+Reconciliation Agent
+  ↓
+Twin Mapper
+  ↓
 Twin Repository
-    ↓
+  ↓
 Mirror
 
 where "Knowledge Interpretation" is the equivalent of the Extractor in document ingestion.
@@ -432,7 +434,7 @@ Multi-session interview planning.
 
 ✓ Every interview question includes a machine-readable rationale identifying one or more of:
 
-evidence_gap
+completion
 clarification
 expansion
 reflection
@@ -473,6 +475,7 @@ Clarification
 Expansion
 Reflection
 Preference
+
 Knowledge Gain
 
 ✓ Every interview response that introduces new information results in either:
