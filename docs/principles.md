@@ -27,6 +27,7 @@ These labels matter.
 10. In-the-round visualizations: Professional self-awareness rarely emerges from a single representation. Because insight is often triggered by viewing the same evidence through different lenses, the system presents multiple complementary visualizations of the Digital Career Twin rather than privileging a single canonical view. Each visualization reveals different relationships within the same underlying evidence, allowing users to discover patterns that may otherwise remain implicit.
 11. Every interaction is either a transformation into the Twin or a transformation out of the Twin.
 12. The DCT exists to increase professional self-awareness.
+13. Single Purpose: The Knowledge Acquisition Agent has one responsibility: to improve the fidelity of the Digital Career Twin. It does not attempt to function as a general-purpose assistant. Every question it asks and every response it provides should contribute directly to the construction, refinement or interpretation of the Twin.
 
 Everything else flows from that.
 
