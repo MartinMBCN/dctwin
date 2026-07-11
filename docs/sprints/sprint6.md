@@ -37,6 +37,7 @@ Twin Repository
 Mirror
 
 where "Knowledge Interpretation" is the equivalent of the Extractor in document ingestion.
+Knowledge Interpretation converts conversational responses into structured Twin updates by classifying information as Evidence, Reflection or Preference before passing it through the standard reconciliation and mapping pipeline.
 
 Unlike document ingestion:
 
@@ -76,17 +77,14 @@ The Knowledge Acquisition Agent should retain awareness of previous interview to
 
 **Interview State**
 
+The interview maintains explicit state comprising:
+
 Current topic
-
 Question history
-
 Open hypotheses
-
-Evidence added
-
-Outstanding follow-ups
-
-Completion status
+Evidence acquired during the current session
+Outstanding follow-up opportunities
+Session completion status
 
 **Three Areas of Exploration**
 1. Past
@@ -225,6 +223,20 @@ aspirations.
 
 Conversation should not be used where a simple control captures the information more effectively.
 
+**Twin-Driven Conversation**
+
+The interview should be driven by the current state of the Twin rather than by a predetermined sequence of questions.
+
+Question selection should maximise expected improvement to the Twin by preferentially exploring:
+
+professionally significant uncertainties;
+incomplete or underrepresented roles;
+major career transitions;
+emerging patterns;
+user objectives and preferences.
+
+The interview should continuously adapt as the Twin evolves.
+
 **Interaction Model**
 
 The Mirror should combine:
@@ -303,6 +315,7 @@ The first question establishes the Twin's credibility.
 Before requesting additional information, the Twin should demonstrate that it has already formed a thoughtful understanding of the user's professional history.
 
 The user should feel that the Twin has studied their career rather than merely parsed their CV.
+The Knowledge Acquisition Agent should generate multiple candidate opening questions, score them using the defined quality dimensions, and present only the highest-ranked question.
 
 Design Principles
 
@@ -426,13 +439,13 @@ Role calibration controls.
 Multi-session interview planning.
 
 **Acceptance Criteria**
-✓ The user can initiate an interview from an existing Digital Career Twin.
+✓ AC1: The user can initiate an interview from an existing Digital Career Twin.
 
-✓ The first interview question references one or more facts, inferences or uncertainties already present in the Twin.
+✓ AC2: The first interview question references one or more facts, inferences or uncertainties already present in the Twin.
 
 (Verifiable by inspecting the question and the underlying Twin.)
 
-✓ Every interview question includes a machine-readable rationale identifying one or more of:
+✓ AC3: Every interview question includes a machine-readable rationale identifying one or more of:
 
 completion
 clarification
@@ -442,25 +455,25 @@ preference
 
 (May be hidden from the production UI but available in developer mode.)
 
-✓ The interview engine generates questions dynamically from the current Twin rather than selecting from a fixed question sequence.
+✓ AC4: The interview engine generates questions dynamically from the current Twin rather than selecting from a fixed question sequence.
 
 (Verifiable by running interviews against materially different Twins.)
 
-✓ Every interview response is classified as one or more of:
+✓ AC5: Every interview response is classified as one or more of:
 
 Evidence
 Reflection
 Preference
 
-✓ Evidence generated during the interview is processed through the existing Reconciliation Agent before being committed to the Twin.
+✓ AC6: Evidence generated during the interview is processed through the existing Reconciliation Agent before being committed to the Twin.
 
-✓ Interview responses classified as Evidence update the appropriate role or create new evidence where appropriate.
+✓ AC7: Interview responses classified as Evidence update the appropriate role or create new evidence where appropriate.
 
-✓ Interview responses classified as Preferences create or update Preference objects within the Twin.
+✓ AC8: Interview responses classified as Preferences create or update Preference objects within the Twin.
 
-✓ If interview responses modify the Twin, the Mirror is regenerated before the next user interaction.
+✓ AC9: If interview responses modify the Twin, the Mirror is regenerated before the next user interaction.
 
-✓ The interview engine does not ask for information already explicitly represented in the Twin unless the purpose of the question is clarification.
+✓ AC10: The interview engine does not ask for information already explicitly represented in the Twin unless the purpose of the question is clarification.
 
 Notice that "unless the purpose..." is important. You don't want to prohibit questions like:
 
@@ -468,7 +481,7 @@ Notice that "unless the purpose..." is important. You don't want to prohibit que
 
 The Twin knows about Datavant. It doesn't know whether the interpretation is correct.
 
-✓ The interview can generate questions from each of the following categories:
+✓ AC11: The interview can generate questions from each of the following categories:
 
 Completion
 Clarification
@@ -476,9 +489,9 @@ Expansion
 Reflection
 Preference
 
-Knowledge Gain
+✓ AC12: Knowledge Gain
 
-✓ Every interview response that introduces new information results in either:
+Every interview response that introduces new information results in either:
 
 a new Evidence item;
 an updated Evidence item;
@@ -487,9 +500,9 @@ a new or updated Preference.
 
 Otherwise you've technically had an interview that accomplished nothing.
 
-Traceability
+✓ AC13: Traceability
 
-✓ Every interview-generated addition to the Twin records interview provenance.
+Every interview-generated addition to the Twin records interview provenance.
 
 For example:
 
