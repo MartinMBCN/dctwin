@@ -18,18 +18,23 @@ ask context-aware questions;
 capture new evidence;
 capture preferences and aspirations;
 update the Twin accordingly.
-Architectural Position
+
+**Architectural Position**
 Twin
     ↓
 Knowledge Acquisition Agent
     ↓
-Conversation
+Interaction
     ↓
-New Information
+Knowledge Interpretation
+    ↓
+Twin Mapper / Reconciliation
     ↓
 Twin Repository
     ↓
 Mirror
+
+where "Knowledge Interpretation" is the equivalent of the Extractor in document ingestion.
 
 Unlike document ingestion:
 
@@ -58,6 +63,29 @@ incomplete roles;
 emerging patterns;
 user objectives;
 opportunities to strengthen or challenge existing inferences.
+
+**Interview Sessions**
+
+The interview should support incremental knowledge acquisition.
+
+A complete Twin should emerge through many short conversations rather than a single exhaustive interview.
+
+The Knowledge Acquisition Agent should retain awareness of previous interview topics and preferentially explore areas where the expected information gain is highest.
+
+**Interview State**
+
+Current topic
+
+Question history
+
+Open hypotheses
+
+Evidence added
+
+Outstanding follow-ups
+
+Completion status
+
 **Three Areas of Exploration**
 1. Past
 
@@ -447,14 +475,12 @@ Reflection
 Preference
 Knowledge Gain
 
-✓ At least one interview response results in a measurable update to the Twin.
+✓ Every interview response that introduces new information results in either:
 
-That update may be:
-
-new Evidence;
-refined Evidence;
-updated Reflection;
-new Preference.
+a new Evidence item;
+an updated Evidence item;
+an updated Reflection;
+a new or updated Preference.
 
 Otherwise you've technically had an interview that accomplished nothing.
 
