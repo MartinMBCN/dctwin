@@ -1,4 +1,4 @@
-Sprint 5 – Guided Knowledge Acquisition
+Sprint 6 – Guided Knowledge Acquisition
 Sprint Goal
 
 The Digital Career Twin can actively improve itself by conducting a context-aware interview that identifies opportunities to deepen evidence, clarify uncertainty and capture user preferences.
