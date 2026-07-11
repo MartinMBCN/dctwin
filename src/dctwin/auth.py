@@ -255,6 +255,7 @@ class LocalAccountRepository:
         twin: dict[str, Any],
         source_documents: list[dict[str, Any]],
         enrollment_documents: list[dict[str, Any]],
+        source_history: list[dict[str, Any]] | None = None,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         state = self._load()
@@ -267,6 +268,7 @@ class LocalAccountRepository:
             "twin": twin,
             "source_documents": source_documents,
             "enrollment_documents": enrollment_documents,
+            "source_history": source_history or [],
         }
         user["persistent_twin"] = record
         self._save(state)

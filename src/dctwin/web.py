@@ -5,7 +5,9 @@ import json
 import os
 import shutil
 import tempfile
-from datetime import datetime
+from collections import deque
+from functools import lru_cache
+from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -18,7 +20,6 @@ from dctwin import __version__
 from dctwin.adapters import AdapterRegistry, DocxCvAdapter, PdfCvAdapter, adapt_cv_text
 from dctwin.agent import SourceAdapterAgent
 from dctwin.auth import LocalAccountRepository, collect_email_candidates, normalize_email
-from dctwin.foundry import FoundryExtractionTwinProvider, FoundryTwinProvider
 from dctwin.io import load_json, write_json
 from dctwin.reconciliation import ReconciliationAgent
 from dctwin.validation import validate_source_document, validate_twin
@@ -32,6 +33,9 @@ CACHE_DIR = "cache"
 ACCOUNT_FILE = "accounts.json"
 LOG_DIR = "logs"
 CACHE_CONTRACT_VERSION = "cv_extraction_v8"
+VALID_TENANT_ID_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-."
+)
 
 
 def _project_root() -> Path:
@@ -48,15 +52,63 @@ def _foundry_configured() -> bool:
     )
 
 
+@lru_cache(maxsize=1)
+def _available_azure_auth_methods() -> list[str]:
+    methods: list[str] = []
+    if shutil.which("azd"):
+        methods.append("azure_developer_cli")
+    if shutil.which("az"):
+        methods.append("azure_cli")
+    auth_mode = os.environ.get("DCTWIN_AUTH_MODE", "device_code").strip().lower()
+    if auth_mode in {"device_code", "auto"}:
+        methods.append("device_code")
+    if auth_mode in {"browser", "interactive_browser", "auto"}:
+        methods.append("interactive_browser")
+    return methods
+
+
 def _health_payload() -> dict[str, Any]:
+    auth_methods = _available_azure_auth_methods()
     return {
         "status": "ok",
         "app_version": __version__,
         "mode": "local",
         "formats": ["pdf", "docx", "pasted_text"],
-        "foundry": "ready" if _foundry_configured() else "not_configured",
+        "foundry": (
+            "ready"
+            if _foundry_configured() and auth_methods
+            else "auth_not_available"
+            if _foundry_configured()
+            else "not_configured"
+        ),
+        "azure_auth": auth_methods,
+        "azure_tenant": "configured" if os.environ.get("AZURE_TENANT_ID") else "not_configured",
+        "auth_mode": os.environ.get("DCTWIN_AUTH_MODE", "device_code"),
         "model_path": os.environ.get("DCTWIN_MODEL_PATH", "staged_extraction"),
     }
+
+
+def _source_adaptation_preflight_error() -> str | None:
+    if not _foundry_configured():
+        return (
+            "The local source adapter is not connected to a Foundry model deployment. "
+            "Set FOUNDRY_PROJECT_ENDPOINT and DCTWIN_MODEL_DEPLOYMENT before ingesting a CV."
+        )
+    return None
+
+
+def _azure_tenant_id() -> str | None:
+    raw = os.environ.get("AZURE_TENANT_ID")
+    if not raw:
+        return None
+    candidate = raw.strip().strip("{}")
+    if not candidate or any(character not in VALID_TENANT_ID_CHARACTERS for character in candidate):
+        raise RuntimeError(
+            "AZURE_TENANT_ID contains invalid characters. Use only the tenant value itself, not labels, quotes, brackets or comments."
+        )
+    if candidate == "00000000-0000-0000-0000-000000000000":
+        raise RuntimeError("AZURE_TENANT_ID is still set to the placeholder all-zero GUID")
+    return candidate
 
 
 def _contracts() -> dict[str, dict[str, Any]]:
@@ -91,8 +143,12 @@ def _account_repository() -> LocalAccountRepository:
 def _load_session() -> dict[str, Any]:
     path = _session_path()
     if not path.is_file():
-        return {"twin": None, "source_documents": [], "enrollment_documents": []}
-    return load_json(path)
+        return {"twin": None, "source_documents": [], "enrollment_documents": [], "source_history": []}
+    session = load_json(path)
+    session.setdefault("source_documents", [])
+    session.setdefault("enrollment_documents", [])
+    session.setdefault("source_history", [])
+    return session
 
 
 def _save_session(session: dict[str, Any]) -> None:
@@ -111,6 +167,7 @@ def _reset_session_twin_only() -> None:
     session["twin"] = None
     session["source_documents"] = []
     session["enrollment_documents"] = []
+    session["source_history"] = []
     _save_session(session)
 
 
@@ -123,7 +180,50 @@ def _manual_cv_label() -> str:
 
 
 def _timing_mark(timings: list[dict[str, Any]], event: str, start: float) -> None:
-    timings.append({"event": event, "elapsed_ms": round((perf_counter() - start) * 1000, 1)})
+    if event == "upload_received":
+        _clear_progress_log()
+    mark = {"event": event, "elapsed_ms": round((perf_counter() - start) * 1000, 1)}
+    timings.append(mark)
+    _write_progress_event(event=event, elapsed_ms=mark["elapsed_ms"])
+
+
+def _write_progress_event(
+    *,
+    event: str,
+    elapsed_ms: float,
+    detail: dict[str, Any] | None = None,
+) -> None:
+    path = _local_state_path() / LOG_DIR / "ingestion-progress.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "created_at": datetime.now(ZoneInfo("UTC")).isoformat(),
+        "event": event,
+        "elapsed_ms": elapsed_ms,
+        "detail": detail or {},
+    }
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _clear_progress_log() -> None:
+    (_local_state_path() / LOG_DIR / "ingestion-progress.jsonl").unlink(missing_ok=True)
+
+
+def _progress_payload() -> dict[str, Any]:
+    path = _local_state_path() / LOG_DIR / "ingestion-progress.jsonl"
+    if not path.is_file():
+        return {"events": [], "latest": None}
+    events: deque[dict[str, Any]] = deque(maxlen=20)
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(event, dict):
+                events.append(event)
+    ordered = list(events)
+    return {"events": ordered, "latest": ordered[-1] if ordered else None}
 
 
 def _write_timing_log(
@@ -154,6 +254,32 @@ def _append_source_document(
     if any(item.get("source_id") == source_document.get("source_id") for item in source_documents):
         return source_documents
     return [*source_documents, source_document]
+
+
+def _append_source_history(
+    source_history: list[dict[str, Any]],
+    *,
+    source_document: dict[str, Any],
+    filename: str,
+    reconciliation: dict[str, Any],
+) -> list[dict[str, Any]]:
+    source_id = source_document.get("source_id")
+    if any(item.get("source_id") == source_id for item in source_history):
+        return source_history
+    return [
+        *source_history,
+        {
+            "source_id": source_id,
+            "label": filename or source_document.get("source_id") or "Source material",
+            "source_type": source_document.get("source_type", "other"),
+            "format": source_document.get("format"),
+            "adapter": source_document.get("adapter", {}).get("name"),
+            "uploaded_at": datetime.now(ZoneInfo("UTC")).isoformat(),
+            "source_blocks": len(source_document.get("blocks", [])),
+            "achievements_added": reconciliation.get("evidence_added", 0),
+            "achievements_merged": reconciliation.get("evidence_merged", 0),
+        },
+    ]
 
 
 def _auth_candidates_payload() -> dict[str, Any]:
@@ -348,6 +474,7 @@ def _post_auth_payload(
                 "twin": persistent["twin"],
                 "source_documents": persistent.get("source_documents", []),
                 "enrollment_documents": persistent.get("enrollment_documents", []),
+                "source_history": persistent.get("source_history", []),
             }
         )
     else:
@@ -381,6 +508,7 @@ def _save_authenticated_session_twin(session_id: str | None) -> dict[str, Any] |
         twin=local_session["twin"],
         source_documents=local_session.get("source_documents", []),
         enrollment_documents=local_session.get("enrollment_documents", []),
+        source_history=local_session.get("source_history", []),
     )
 
 
@@ -394,6 +522,7 @@ def _persistent_record_from_session(
     twin = local_session["twin"]
     source_documents = local_session.get("source_documents", [])
     enrollment_documents = local_session.get("enrollment_documents", [])
+    source_history = local_session.get("source_history", [])
     if existing is not None:
         twin, _summary = ReconciliationAgent().reconcile(
             existing_twin=existing.get("twin"),
@@ -409,6 +538,11 @@ def _persistent_record_from_session(
             enrollment_documents,
             key="source_id",
         )
+        source_history = _merge_documents(
+            existing.get("source_history", []),
+            source_history,
+            key="source_id",
+        )
         contracts = _contracts()
         validate_twin(
             twin,
@@ -421,6 +555,7 @@ def _persistent_record_from_session(
                 "twin": twin,
                 "source_documents": source_documents,
                 "enrollment_documents": enrollment_documents,
+                "source_history": source_history,
             }
         )
     return repo.save_persistent_twin(
@@ -428,6 +563,7 @@ def _persistent_record_from_session(
         twin=twin,
         source_documents=source_documents,
         enrollment_documents=enrollment_documents,
+        source_history=source_history,
     )
 
 
@@ -492,8 +628,95 @@ def _save_cached_candidate(source_document: dict[str, Any], candidate: dict[str,
     )
 
 
-def _provider() -> FoundryTwinProvider:
-    from azure.identity import AzureDeveloperCliCredential
+def _auth_timeout_seconds() -> int:
+    raw = os.environ.get("DCTWIN_AUTH_TIMEOUT_SECONDS", "180")
+    try:
+        return max(30, int(raw))
+    except ValueError:
+        return 180
+
+
+def _azure_token_scope() -> str:
+    return os.environ.get("DCTWIN_AZURE_SCOPE", "https://ai.azure.com/.default")
+
+
+def _device_code_prompt(verification_uri: str, user_code: str, expires_on: Any) -> None:
+    detail = {
+        "verification_uri": verification_uri,
+        "user_code": user_code,
+        "expires_on": getattr(expires_on, "isoformat", lambda: str(expires_on))(),
+    }
+    _write_progress_event(event="azure_device_code_prompted", elapsed_ms=0, detail=detail)
+    print(
+        "\nAzure sign-in required for DCTwin.",
+        f"\nOpen: {verification_uri}",
+        f"\nEnter code: {user_code}",
+        f"\nCode expires: {detail['expires_on']}\n",
+        flush=True,
+    )
+
+
+@lru_cache(maxsize=1)
+def _credential() -> Any:
+    from azure.identity import (
+        AzureCliCredential,
+        AzureDeveloperCliCredential,
+        ChainedTokenCredential,
+        DeviceCodeCredential,
+        InteractiveBrowserCredential,
+    )
+    from dctwin.foundry import FoundryExtractionTwinProvider, FoundryTwinProvider
+
+    tenant_id = _azure_tenant_id()
+    credentials = []
+    if shutil.which("azd"):
+        credentials.append(AzureDeveloperCliCredential(tenant_id=tenant_id, process_timeout=30))
+    if shutil.which("az"):
+        credentials.append(AzureCliCredential(tenant_id=tenant_id, process_timeout=30))
+    auth_mode = os.environ.get("DCTWIN_AUTH_MODE", "device_code").strip().lower()
+    if auth_mode in {"device_code", "auto"}:
+        credentials.append(
+            DeviceCodeCredential(
+                tenant_id=tenant_id,
+                timeout=_auth_timeout_seconds(),
+                prompt_callback=_device_code_prompt,
+            )
+        )
+    if auth_mode in {"browser", "interactive_browser", "auto"}:
+        credentials.append(InteractiveBrowserCredential(tenant_id=tenant_id))
+    return credentials[0] if len(credentials) == 1 else ChainedTokenCredential(*credentials)
+
+
+def _acquire_azure_token(started: float | None = None) -> Any:
+    credential = _credential()
+    token_scope = _azure_token_scope()
+    if started is not None:
+        _timing_mark([], "azure_token_acquisition_started", started)
+    print(f"Acquiring Azure token using {', '.join(_available_azure_auth_methods())}...", flush=True)
+    token = credential.get_token(token_scope)
+    if started is not None:
+        expires_at = datetime.fromtimestamp(token.expires_on, UTC).isoformat()
+        _write_progress_event(
+            event="azure_token_acquisition_completed",
+            elapsed_ms=round((perf_counter() - started) * 1000, 1),
+            detail={
+                "expires_at": expires_at,
+                "seconds_remaining": max(0, int(token.expires_on - datetime.now(UTC).timestamp())),
+            },
+        )
+    print(
+        "Azure token acquired; expires "
+        f"{datetime.fromtimestamp(token.expires_on, UTC).isoformat()}",
+        flush=True,
+    )
+    return token
+
+
+def _provider(started: float | None = None) -> Any:
+    from dctwin.foundry import FoundryExtractionTwinProvider, FoundryTwinProvider
+
+    credential = _credential()
+    _acquire_azure_token(started)
 
     provider_class = (
         FoundryTwinProvider
@@ -503,7 +726,7 @@ def _provider() -> FoundryTwinProvider:
     return provider_class.from_files(
         project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
         model_deployment=os.environ["DCTWIN_MODEL_DEPLOYMENT"],
-        credential=AzureDeveloperCliCredential(process_timeout=30),
+        credential=credential,
         project_root=_project_root(),
     )
 
@@ -527,6 +750,8 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             )
         elif self.path == "/api/health":
             self._send_json(HTTPStatus.OK, _health_payload())
+        elif self.path == "/api/progress":
+            self._send_json(HTTPStatus.OK, _progress_payload())
         elif self.path == "/api/state":
             session = _load_session()
             twin = session.get("twin")
@@ -537,6 +762,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                     "twin": twin,
                     "roles": twin.get("roles", []) if twin else [],
                     "source_count": len(session.get("source_documents", [])),
+                    "source_history": session.get("source_history", []),
                 },
             )
         elif self.path == "/api/auth/candidates":
@@ -648,6 +874,10 @@ class LocalAppHandler(BaseHTTPRequestHandler):
         if self.headers.get("X-DCTWIN-Local") != "1":
             self._send_json(HTTPStatus.FORBIDDEN, {"error": "Local request header missing"})
             return
+        preflight_error = _source_adaptation_preflight_error()
+        if preflight_error:
+            self._send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": preflight_error})
+            return
 
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -677,6 +907,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
         started = perf_counter()
         try:
             _timing_mark(timings, "upload_received", started)
+            _timing_mark(timings, "system_health_checked", started)
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temporary:
                 temporary.write(self.rfile.read(length))
                 temporary_path = Path(temporary.name)
@@ -705,6 +936,10 @@ class LocalAppHandler(BaseHTTPRequestHandler):
         if self.headers.get("X-DCTWIN-Local") != "1":
             self._send_json(HTTPStatus.FORBIDDEN, {"error": "Local request header missing"})
             return
+        preflight_error = _source_adaptation_preflight_error()
+        if preflight_error:
+            self._send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": preflight_error})
+            return
         timings: list[dict[str, Any]] = []
         started = perf_counter()
         try:
@@ -712,6 +947,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             text = str(payload.get("text", ""))
             label = str(payload.get("label") or _manual_cv_label())
             _timing_mark(timings, "upload_received", started)
+            _timing_mark(timings, "system_health_checked", started)
             _timing_mark(timings, "text_extraction_started", started)
             adapted = adapt_cv_text(text, label=label, content_identity=f"{label}\n{text}")
             _timing_mark(timings, "text_extraction_completed", started)
@@ -758,6 +994,13 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             source_documents = _append_source_document(
                 session.get("source_documents", []), source_doc
             )
+            reconciliation_payload = reconciliation.as_dict()
+            source_history = _append_source_history(
+                session.get("source_history", []),
+                source_document=source_doc,
+                filename="Added achievements",
+                reconciliation=reconciliation_payload,
+            )
             _timing_mark(timings, "json_validation_started", started)
             validate_twin(
                 updated,
@@ -769,6 +1012,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             _timing_mark(timings, "mirror_rendered", started)
             session["twin"] = updated
             session["source_documents"] = source_documents
+            session["source_history"] = source_history
             session.setdefault("enrollment_documents", []).append(
                 {
                     "schema_version": "0.1.0",
@@ -795,7 +1039,8 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                     },
                     twin=updated,
                     filename="Added achievements",
-                    reconciliation=reconciliation.as_dict(),
+                    reconciliation=reconciliation_payload,
+                    source_history=source_history,
                     timings=timings,
                     message="The achievements were added to the session Twin and validated.",
                 ),
@@ -825,7 +1070,8 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             enrollment_document = adapted.enrollment_document
             candidate_twin = cached_candidate
         else:
-            provider = _provider()
+            _timing_mark(timings, "model_provider_initializing", started)
+            provider = _provider(started)
             try:
                 _timing_mark(timings, "model_call_started", started)
                 agent = SourceAdapterAgent(
@@ -839,6 +1085,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                 run = agent.run_adapted(adapted)
                 _timing_mark(timings, "model_call_completed", started)
             finally:
+                _timing_mark(timings, "model_provider_closing", started)
                 provider.close()
             source_document = run.source_document
             enrollment_document = run.enrollment_document
@@ -846,13 +1093,22 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             _save_cached_candidate(source_document, candidate_twin)
 
         session = _load_session()
+        _timing_mark(timings, "reconciliation_started", started)
         reconciliation_agent = ReconciliationAgent()
         updated, reconciliation = reconciliation_agent.reconcile(
             existing_twin=session.get("twin"),
             candidate_twin=candidate_twin,
         )
+        _timing_mark(timings, "reconciliation_completed", started)
+        reconciliation_payload = reconciliation.as_dict()
         source_documents = _append_source_document(
             session.get("source_documents", []), source_document
+        )
+        source_history = _append_source_history(
+            session.get("source_history", []),
+            source_document=source_document,
+            filename=filename,
+            reconciliation=reconciliation_payload,
         )
         _timing_mark(timings, "json_validation_started", started)
         validate_twin(
@@ -865,6 +1121,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
         _timing_mark(timings, "mirror_rendered", started)
         session["twin"] = updated
         session["source_documents"] = source_documents
+        session["source_history"] = source_history
         session.setdefault("enrollment_documents", []).append(enrollment_document)
         _save_session(session)
         _save_authenticated_session_twin(self._auth_session_id())
@@ -879,7 +1136,8 @@ class LocalAppHandler(BaseHTTPRequestHandler):
             enrollment_document=enrollment_document,
             twin=updated,
             filename=filename,
-            reconciliation=reconciliation.as_dict(),
+            reconciliation=reconciliation_payload,
+            source_history=source_history,
             timings=timings,
             message=(
                 "The Source Adapter Agent generated a candidate Twin and the "
@@ -895,6 +1153,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
         twin: dict[str, Any],
         filename: str,
         reconciliation: dict[str, Any],
+        source_history: list[dict[str, Any]],
         timings: list[dict[str, Any]],
         message: str,
     ) -> dict[str, Any]:
@@ -912,6 +1171,7 @@ class LocalAppHandler(BaseHTTPRequestHandler):
                 "enrollment_candidates": len(enrollment_document["candidates"]),
             },
             "reconciliation": reconciliation,
+            "source_history": source_history,
             "timings": timings,
             "stages": [
                 {
@@ -993,8 +1253,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
     if args.host not in {"127.0.0.1", "localhost", "::1"}:
         raise SystemExit("The preview server may only bind to the local machine")
     server = ThreadingHTTPServer((args.host, args.port), LocalAppHandler)

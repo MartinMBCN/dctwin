@@ -64,6 +64,37 @@ def test_health_payload_exposes_semver_app_version() -> None:
     assert re.match(r"^\d+\.\d+\.\d+$", payload["app_version"])
 
 
+def test_source_history_records_upload_metadata_once() -> None:
+    source_document = {
+        "source_id": "src_cv",
+        "source_type": "cv",
+        "format": "application/pdf",
+        "adapter": {"name": "pdf_cv"},
+        "blocks": [{"id": "block_1"}, {"id": "block_2"}],
+    }
+
+    history = web._append_source_history(
+        [],
+        source_document=source_document,
+        filename="Example CV.pdf",
+        reconciliation={"evidence_added": 7, "evidence_merged": 2},
+    )
+    history = web._append_source_history(
+        history,
+        source_document=source_document,
+        filename="Example CV.pdf",
+        reconciliation={"evidence_added": 7, "evidence_merged": 2},
+    )
+
+    assert len(history) == 1
+    assert history[0]["label"] == "Example CV.pdf"
+    assert history[0]["source_type"] == "cv"
+    assert history[0]["source_blocks"] == 2
+    assert history[0]["achievements_added"] == 7
+    assert history[0]["achievements_merged"] == 2
+    assert history[0]["uploaded_at"]
+
+
 def test_auth_candidates_collect_all_session_email_candidates(
     monkeypatch,
     tmp_path: Path,
@@ -340,6 +371,7 @@ def test_authenticated_session_update_saves_persistent_twin(
             "twin": {"schema_version": "0.2.0", "twin_id": "twin_updated"},
             "source_documents": [{"source_id": "src_updated"}],
             "enrollment_documents": [{"source_id": "src_updated", "candidates": []}],
+            "source_history": [{"source_id": "src_updated", "label": "Updated CV"}],
         }
     )
 
@@ -351,6 +383,9 @@ def test_authenticated_session_update_saves_persistent_twin(
     assert state["users"][0]["persistent_twin"]["twin"]["twin_id"] == "twin_updated"
     assert state["users"][0]["persistent_twin"]["source_documents"] == [
         {"source_id": "src_updated"}
+    ]
+    assert state["users"][0]["persistent_twin"]["source_history"] == [
+        {"source_id": "src_updated", "label": "Updated CV"}
     ]
 
 

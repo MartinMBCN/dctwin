@@ -2,6 +2,158 @@
 
 Terse user-facing and acceptance-testing notes for each app increment. The app version is exposed at `/api/health` as `app_version`.
 
+## 0.3.39 — FAQ foundation
+
+- Replaced the FAQ placeholder with initial product guidance for building, developing, reflecting on and eventually exploring the Digital Career Twin.
+- Clarified that the Mirror is a negotiable reflection of the underlying Twin, not an immutable output.
+- Introduced future visualizations as alternate views over the same canonical model.
+
+## 0.3.38 — Start-of-day credential refresh
+
+- Added `dctwin.dev --refresh-auth` to acquire Azure credentials before the local server starts accepting CV ingestion work.
+- Reused a shared in-process Azure credential so the refreshed token is available to later Foundry calls in the same server process.
+- Updated local startup instructions to refresh credentials at server start.
+
+## 0.3.37 — Credential-first auth diagnostics
+
+- Added `dctwin.ping --auth` to actively acquire an Azure token and report its expiry time.
+- CV ingestion now logs Azure token expiry after successful token acquisition.
+- README local troubleshooting now starts with credential expiry/auth validation before deeper investigation.
+
+## 0.3.36 — Azure device-code prompt appears in the UI
+
+- Added `/api/progress` so the browser can poll live backend ingestion progress.
+- The upload wizard now surfaces Azure device-code sign-in instructions directly in the Career Twin UI.
+- Starting a new upload clears the previous ingestion progress log so stale Azure prompts are not shown.
+
+## 0.3.35 — Visible Azure token handshake
+
+- Device-code authentication now prints the Azure sign-in URL, code and expiry directly in the terminal.
+- CV ingestion logs explicit `azure_token_acquisition_started`, `azure_device_code_prompted` and `azure_token_acquisition_completed` events.
+- Added `DCTWIN_AUTH_TIMEOUT_SECONDS` so local auth waits are bounded rather than appearing to hang indefinitely.
+- `/api/health` now reports the selected local auth mode.
+
+## 0.3.34 — Device-code auth is the local default
+
+- Added `DCTWIN_AUTH_MODE` for local Azure authentication mode selection.
+- Defaults to `device_code` so Azure login appears in the terminal instead of redirecting the app browser.
+- Browser login remains available by setting `DCTWIN_AUTH_MODE=browser`; `auto` enables both device-code and browser fallbacks.
+- `dctwin.ping` now reports and validates the selected auth mode.
+
+## 0.3.33 — Tenant validation follows Azure Identity rules
+
+- Relaxed `AZURE_TENANT_ID` validation to match Azure Identity: letters, numbers, hyphens and dots are accepted.
+- `.env` loading now strips simple inline comments from values so copied configuration is less brittle.
+- Runtime tenant validation now rejects labels, quotes, brackets and comments without requiring the tenant value to be GUID-shaped.
+
+## 0.3.32 — Tenant ID validation in ping
+
+- `dctwin.ping` added first-pass tenant validation, originally assuming GUID-shaped tenant IDs.
+- Local auth normalized harmless `{tenant-id}` formatting before passing the tenant to Azure Identity.
+- Superseded by 0.3.33 after confirming Azure Identity also accepts non-GUID tenant identifiers containing letters, numbers, hyphens and dots.
+
+## 0.3.31 — Explicit Azure tenant for local auth
+
+- Added `AZURE_TENANT_ID` support for browser, device-code, Azure CLI and Azure Developer CLI credentials.
+- `/api/health` now reports whether the Azure tenant is configured.
+- `dctwin.ping` warns when the tenant is missing because browser/device-code login may otherwise choose the wrong identity context.
+- Updated `.env.example` to make tenant configuration part of the local setup path.
+
+## 0.3.30 — Local environment ping
+
+- Added a local environment ping to make Python, package import, Foundry configuration, Azure auth, writable state and port readiness explicit before CV ingestion.
+- Added a guarded local dev runner that loads `.env`, runs ping, optionally resets local session/cache and then starts the preview server.
+- Documented the repeatable local startup path so future test-environment failures have one clear front door.
+
+## 0.3.29 — Browser/device-code Azure auth fallback
+
+- Added Python-native Azure authentication fallbacks after `azd` and `az`: interactive browser login and device-code login.
+- Local CV ingestion no longer requires installing Azure CLI or Azure Developer CLI when browser/device-code auth is available.
+- `/api/health` now reports `interactive_browser` and `device_code` as available auth routes.
+
+## 0.3.28 — Azure auth fallback
+
+- Source Adapter authentication now supports either Azure Developer CLI (`azd`) or Azure CLI (`az`).
+- Uses Azure Developer CLI first when available, then falls back to Azure CLI via chained credentials.
+- `/api/health` now reports available local Azure auth methods and distinguishes missing auth tooling from missing Foundry configuration.
+- CV ingestion preflight now fails early when neither supported Azure auth command is available.
+
+## 0.3.27 — Live ingestion progress logging
+
+- Added live ingestion progress events written to `.dctwin-local/logs/ingestion-progress.jsonl` as each backend stage begins or completes.
+- Added explicit progress marks for model provider initialization, model provider close, reconciliation start and reconciliation completion.
+- Makes stuck ingestion diagnosable before the request completes or fails.
+
+## 0.3.26 — Runtime validation no longer imports jsonschema
+
+- Replaced runtime `jsonschema` validation with a lightweight local validator for the schema subset used by DCT contracts.
+- Keeps explicit DCT referential-integrity checks for source refs, role refs, evidence refs, tag refs and Overview Brief support.
+- Removes another startup/downstream import-stall risk from the CV ingestion path.
+
+## 0.3.25 — CV ingestion preflight health check
+
+- Added a preflight health check before uploaded or pasted CV ingestion starts.
+- The browser now verifies that the local server is reachable and the Source Adapter has a configured Foundry deployment before uploading or adapting CV material.
+- The backend also rejects CV ingestion early when the model path is not configured, before text extraction or source adaptation work begins.
+- Added a `system_health_checked` timing mark to successful CV ingestion runs.
+
+## 0.3.24 — Startup import hardening
+
+- Lazy-load PDF, DOCX and Foundry/Azure dependencies so the local web server can start before heavy adapter/model libraries are needed.
+- Bypass optional `jsonschema` format-checker imports during contract validation; explicit DCT referential-integrity checks remain in place.
+- Improves local startup reliability after virtualenv/Python import stalls.
+
+## 0.3.23 — Header navigation alignment
+
+- Reworked the product header so the main navigation aligns with the motto line rather than the large product title.
+- Kept the desktop navigation on one line with tighter no-wrap button styling.
+- Widened the desktop shell slightly so the product navigation breathes without wrapping awkwardly.
+
+## 0.3.22 — Product navigation and source materials page
+
+- Added top-level navigation for Your career twin, Visualizations, Source materials, Sign in/Your account, Interview and FAQ.
+- Added placeholder pages for Visualizations, Interview and FAQ.
+- Moved account access into the top navigation.
+- Added a Source materials page listing uploaded/pasted sources and manually added achievements with upload time, text-block count, achievements added and achievements merged.
+- Added session/persistent source-history metadata without storing uploaded CV files.
+- Documented source removal as deferred because it needs careful evidence/provenance cascade rules.
+
+## 0.3.21 — Sprint 5 scope clarification
+
+- Re-scoped Sprint 5 as Career Mirror UX improvements plus Overview Brief quality work.
+- Carved the Mirror user interaction model into a future sprint/backlog item.
+- Documented that Explain, Challenge, Correct, Confirm, item-level Add evidence, tag calibration and Interview-style questions are intentionally deferred.
+
+## 0.3.20 — Overview Brief editorial pass
+
+- Added ADR-016: Overview Brief assembly now includes an explicit editorial pass between inference and final rendering.
+- Updated the Overview Brief Quality Contract with coverage, uniqueness, hierarchy, proportionality, novelty and compression rules.
+- Added section-aware editorial novelty filtering so bullets that do not add materially new information are dropped before section limits are applied.
+- Added operating-model editorial compression for overlapping product-centric, team-of-teams and delivery-scaling observations.
+- Added regression coverage for the Novelty rule.
+
+## 0.3.19 — Provenance is not confidence
+
+- Added ADR-015 distinguishing source provenance, evidence confidence and inference strength.
+- Updated the Overview Brief Quality Contract to state that repeated user-authored sources strengthen provenance, not intrinsic evidence confidence.
+- Updated duplicate evidence reconciliation actions to report `confidence_delta: none` and `inference_delta: none`.
+- Prevented duplicate/remapped inference support from increasing inference confidence when no distinct new evidence was added.
+- Added regression coverage for duplicate provenance not inflating tag confidence or inference confidence.
+
+## 0.3.18 — Overview Brief evidence and ordering enforcement
+
+- Enforced Evidence Quality by dropping model-generated interpretation and attention items that do not reference supporting evidence.
+- Added contract validation that canonical interpretation and attention brief items require supporting evidence.
+- Enforced Editorial Quality by ordering items within each section using an evidence-aware strength score, not salience alone.
+- Added regression coverage for unsupported interpretation filtering, contract rejection and strongest-supported ordering.
+
+## 0.3.17 — Overview Brief section budgets
+
+- Added deterministic section budgets so Overview Brief sections remain scanable as more CVs are added.
+- Refiled confidence-style observations into Confidence statement instead of Areas of less clarity.
+- Suppressed speculative attention items about turnover or project-limited roles when not directly evidenced by the source.
+- Added regression coverage for section limits, confidence refiling and speculation suppression.
+
 ## 0.3.16 — Overview Brief Quality Contract
 
 - Added an explicit six-part Overview Brief Quality Contract covering Information Architecture, Editorial Quality, Evidence Quality, Presentation, Reasoning Quality and Completeness.
@@ -110,7 +262,7 @@ Terse user-facing and acceptance-testing notes for each app increment. The app v
 
 ## 0.3.0 — Sprint 5 Career Mirror surface
 
-- Split the Career Mirror into Overview, Career themes, Questions, Career timeline and Education/Training tabs.
+- Split the Career Mirror into Overview, Career themes, Questions, Career timeline and Education/Training tabs. Later 0.3.x increments replaced Questions with Strengths and deferred Questions to the future Interview feature.
 - Moved mechanical views behind `?debug=true`: source blocks, reconciliation, timings, Twin JSON, local reset and technical input blurb.
 - Rewrote the Overview summary into a more conversational “current understanding” voice.
 - Added local timing JSONL logging for ingestion and manual-achievement updates.

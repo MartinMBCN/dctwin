@@ -73,10 +73,40 @@ dctwin validate path/to/twin.json
 Run the local preview UI:
 
 ```bash
-dctwin-web
+PYTHONPATH=src .venv/bin/python -m dctwin.ping
+PYTHONPATH=src .venv/bin/python -m dctwin.dev --reset --refresh-auth
 ```
 
-Then open `http://127.0.0.1:8765`. The preview binds only to the local machine, processes uploads in a temporary file that is deleted after each request, and does not call Foundry.
+Then open `http://127.0.0.1:8766`. The preview binds only to the local machine and processes uploads in a temporary file that is deleted after each request.
+
+For repeatable local testing, put Foundry configuration in an ignored `.env` file:
+
+```bash
+cp .env.example .env
+# edit .env with your project endpoint and model deployment
+PYTHONPATH=src .venv/bin/python -m dctwin.ping
+PYTHONPATH=src .venv/bin/python -m dctwin.dev --reset --refresh-auth
+```
+
+The local environment ping is the first point of failure for test-environment issues. It checks Python version, writable local state, Foundry configuration, import stalls for PDF/DOCX/Azure packages, available Azure authentication routes and the local preview port before the UI accepts a CV.
+
+See [`docs/local-development.md`](docs/local-development.md) for the internal local-development runbook, including start-of-day credential refresh, auth diagnostics and the Ockham order for local failures.
+
+When Foundry calls appear stuck, check credentials first:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m dctwin.ping --auth
+```
+
+This actively acquires an Azure token, shows any required device-code login, and reports the token expiry time.
+
+For daily local testing, prefer starting the server with credential refresh:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m dctwin.dev --reset --refresh-auth
+```
+
+That forces the Azure handshake before the app accepts CV ingestion work.
 
 When the Foundry environment variables are set, the preview can create and update a local session Twin:
 

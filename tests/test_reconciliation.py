@@ -14,12 +14,16 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_reconciliation_merges_duplicate_evidence_as_provenance() -> None:
     existing = load_json(ROOT / "tests/fixtures/valid_twin.json")
     incoming = deepcopy(existing)
+    existing_capability_confidence = existing["evidence_items"][0]["tag_assignments"]["capabilities"][0]["confidence"]
+    existing_inference_confidence = existing["inferences"][0]["confidence"]
     incoming["sources"][0] = {
         **incoming["sources"][0],
         "id": "src_second_cv",
         "label": "Second CV",
         "content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     }
+    incoming["evidence_items"][0]["tag_assignments"]["capabilities"][0]["confidence"] = 1.0
+    incoming["inferences"][0]["confidence"] = 0.99
     for ref in incoming["roles"][0]["source_refs"]:
         ref["source_id"] = "src_second_cv"
     for ref in incoming["evidence_items"][0]["source_refs"]:
@@ -36,6 +40,18 @@ def test_reconciliation_merges_duplicate_evidence_as_provenance() -> None:
     assert {
         ref["source_id"] for ref in updated["evidence_items"][0]["source_refs"]
     } == {"src_synthetic_cv", "src_second_cv"}
+    assert (
+        updated["evidence_items"][0]["tag_assignments"]["capabilities"][0]["confidence"]
+        == existing_capability_confidence
+    )
+    assert updated["inferences"][0]["confidence"] == existing_inference_confidence
+    duplicate_action = next(
+        action
+        for action in summary.actions
+        if action["classification"] == "DUPLICATE" and action["entity"] == "evidence"
+    )
+    assert duplicate_action["confidence_delta"] == "none"
+    assert duplicate_action["inference_delta"] == "none"
 
 
 def test_manual_achievement_updates_twin_with_user_entered_source() -> None:
@@ -159,6 +175,36 @@ def test_reconciliation_merges_similar_capability_hypotheses() -> None:
 
     assert len(updated["inferences"]) == 1
     assert len(updated["inferences"][0]["supporting_evidence_ids"]) == 2
+    assert updated["inferences"][0]["confidence"] == incoming["inferences"][0]["confidence"]
+
+
+def test_reconciliation_does_not_strengthen_inference_for_duplicate_support() -> None:
+    existing = _twin_with_evidence(
+        "Reduced AWS costs by 37% through Kubernetes transformation.",
+        inference_value="Delivers measurable cost savings through platform engineering",
+    )
+    incoming = deepcopy(existing)
+    incoming["sources"][0]["id"] = "src_second_cv"
+    incoming["sources"][0]["content_hash"] = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    incoming["evidence_items"][0]["id"] = "ev_second_cv"
+    incoming["inferences"][0]["supporting_evidence_ids"] = ["ev_second_cv"]
+    incoming["inferences"][0]["confidence"] = 0.99
+    for ref in incoming["evidence_items"][0]["source_refs"]:
+        ref["source_id"] = "src_second_cv"
+    for ref in incoming["roles"][0]["source_refs"]:
+        ref["source_id"] = "src_second_cv"
+
+    updated, summary = ReconciliationAgent().reconcile(
+        existing_twin=existing,
+        candidate_twin=incoming,
+    )
+
+    assert summary.evidence_merged == 1
+    assert len(updated["evidence_items"]) == 1
+    assert updated["inferences"][0]["supporting_evidence_ids"] == [
+        existing["evidence_items"][0]["id"]
+    ]
+    assert updated["inferences"][0]["confidence"] == existing["inferences"][0]["confidence"]
 
 
 def test_reconciliation_remaps_overview_brief_item_evidence_refs() -> None:
@@ -503,6 +549,179 @@ def test_reconciliation_refiles_uncertainty_and_drops_non_cv_native_caveats() ->
     assert not any("retention outcomes" in item["text"] for item in items)
     assert not any("post-engagement" in item["text"] for item in items)
     assert not any("pure-contract" in item["text"] for item in items)
+
+
+def test_reconciliation_limits_overview_sections_and_refiles_confidence_items() -> None:
+    existing = _twin_with_evidence("Delivered platform and operating model transformation.")
+    incoming = _twin_with_evidence(
+        "Led AI transformation and quantified delivery improvements.",
+        source_id="src_second_cv",
+    )
+    evidence_id = existing["evidence_items"][0]["id"]
+    incoming_id = incoming["evidence_items"][0]["id"]
+    pattern_texts = [
+        "Repeatedly hired to scale engineering organizations and introduce product-centric operating models.",
+        "Senior technology and AI transformation roles recur across enterprise-scale adoption work.",
+        "Focus on measurable operational outcomes including quantified cost savings and reliability improvements.",
+        "Combines hands-on engineering delivery with strategic governance and executive reporting.",
+        "Translates AI and automation pilots into production-grade workflows that reduce manual effort.",
+        "Works across Canada, US, Spain, Poland and UK, indicating cross-domain mobility.",
+        "Experienced in regulated GxP and enterprise risk contexts with compliance-aligned controls.",
+        "Frequently designs team-of-teams structures to reduce dependencies and speed delivery.",
+    ]
+    existing["reflection"]["overview_brief_items"] = [
+        _brief_item(
+            "patterns_and_structural_observations",
+            text,
+            evidence_id,
+        )
+        for text in pattern_texts
+    ]
+    incoming["reflection"]["overview_brief_items"] = [
+        _brief_item(
+            "areas_of_less_clarity",
+            "Observations are based on explicit quantified outcomes and role descriptions in the source; confidence is higher for technical delivery and operating-model claims.",
+            incoming_id,
+        ),
+        _brief_item(
+            "professionally_salient_attention_items",
+            "Recent role is short; assess whether role was project-limited or indicative of turnover.",
+            incoming_id,
+        ),
+    ]
+
+    updated, _summary = ReconciliationAgent().reconcile(
+        existing_twin=existing,
+        candidate_twin=incoming,
+    )
+
+    items = updated["reflection"]["overview_brief_items"]
+    sections = [item["section"] for item in items]
+    assert sections.count("patterns_and_structural_observations") == 6
+    assert sections.count("confidence_statement") == 1
+    assert sections.count("areas_of_less_clarity") == 0
+    assert not any("turnover" in item["text"].lower() for item in items)
+    assert not any("project-limited" in item["text"].lower() for item in items)
+
+
+def test_editorial_pass_drops_brief_items_without_new_information() -> None:
+    existing = _twin_with_evidence(
+        "Scaled engineering teams and introduced product-centric operating models.",
+    )
+    incoming = _twin_with_evidence(
+        "Reduced dependencies and improved delivery speed through team-of-teams structures.",
+        source_id="src_second_cv",
+    )
+    existing_id = existing["evidence_items"][0]["id"]
+    incoming_id = incoming["evidence_items"][0]["id"]
+    existing["reflection"]["overview_brief_items"] = [
+        {
+            **_brief_item(
+                "patterns_and_structural_observations",
+                "Repeatedly hired to scale engineering organizations and introduce product-centric/platform operating models that improve delivery velocity and reliability.",
+                existing_id,
+            ),
+            "kind": "interpretation",
+            "salience": 0.95,
+            "confidence": 0.9,
+            "supporting_evidence_ids": [existing_id, incoming_id],
+        }
+    ]
+    incoming["reflection"]["overview_brief_items"] = [
+        {
+            **_brief_item(
+                "patterns_and_structural_observations",
+                "Frequently designs and implements operating models and team-of-teams structures to reduce dependencies and speed delivery.",
+                incoming_id,
+            ),
+            "kind": "interpretation",
+            "salience": 0.82,
+            "confidence": 0.85,
+            "supporting_evidence_ids": [incoming_id],
+        },
+        {
+            **_brief_item(
+                "patterns_and_structural_observations",
+                "Works across Canada, US, Spain, Poland and UK, indicating cross-domain mobility.",
+                incoming_id,
+            ),
+            "kind": "observation",
+            "salience": 0.8,
+            "confidence": 0.8,
+            "supporting_evidence_ids": [incoming_id],
+        },
+    ]
+
+    updated, _summary = ReconciliationAgent().reconcile(
+        existing_twin=existing,
+        candidate_twin=incoming,
+    )
+
+    patterns = [
+        item["text"]
+        for item in updated["reflection"]["overview_brief_items"]
+        if item["section"] == "patterns_and_structural_observations"
+    ]
+    assert len(patterns) == 2
+    assert any("scale engineering organizations" in text for text in patterns)
+    assert any("cross-domain mobility" in text for text in patterns)
+    assert not any("team-of-teams structures" in text for text in patterns)
+
+
+def test_reconciliation_orders_stronger_supported_brief_items_first() -> None:
+    existing = _twin_with_evidence("Delivered AI adoption metrics across 400 staff.")
+    incoming = _twin_with_evidence(
+        "Reduced AWS costs by 37% and saved $1.1M annually.",
+        source_id="src_second_cv",
+    )
+    existing_id = existing["evidence_items"][0]["id"]
+    incoming_id = incoming["evidence_items"][0]["id"]
+    existing["reflection"]["overview_brief_items"] = [
+        {
+            **_brief_item(
+                "areas_of_higher_confidence",
+                "Generic leadership pattern across technology roles.",
+                existing_id,
+            ),
+            "salience": 0.95,
+            "confidence": 0.9,
+            "supporting_evidence_ids": [existing_id],
+        }
+    ]
+    incoming["reflection"]["overview_brief_items"] = [
+        {
+            **_brief_item(
+                "areas_of_higher_confidence",
+                "Quantified operational impact includes 37% AWS cost reduction and $1.1M annual savings.",
+                incoming_id,
+            ),
+            "salience": 0.82,
+            "confidence": 0.86,
+            "kind": "interpretation",
+            "supporting_evidence_ids": [existing_id, incoming_id],
+        },
+        {
+            **_brief_item(
+                "patterns_and_structural_observations",
+                "Unsupported interpretation should be dropped before rendering.",
+                incoming_id,
+            ),
+            "kind": "interpretation",
+            "supporting_evidence_ids": [],
+        },
+    ]
+
+    updated, _summary = ReconciliationAgent().reconcile(
+        existing_twin=existing,
+        candidate_twin=incoming,
+    )
+
+    items = updated["reflection"]["overview_brief_items"]
+    higher_confidence = [
+        item for item in items if item["section"] == "areas_of_higher_confidence"
+    ]
+    assert "37% AWS cost reduction" in higher_confidence[0]["text"]
+    assert not any("Unsupported interpretation" in item["text"] for item in items)
 
 
 def test_reconciliation_merges_similar_recurring_patterns() -> None:

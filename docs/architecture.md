@@ -229,3 +229,98 @@ Consequences:
 - Sprint feedback can name the failing quality dimension rather than requesting generic improvement.
 - Model extraction remains responsible for candidate observations, but the application remains responsible for canonical sectioning, validation, deduplication and presentation.
 - Future evaluation fixtures can score Overview Briefs against the six dimensions.
+
+ADR-015: Evidence confidence, provenance and inference weighting are distinct
+
+Status: Accepted.
+
+Context: The system ingests multiple user-authored sources that may describe the same professional experience, including CVs, pasted text, interviews, LinkedIn profiles and future source types. Sprint testing showed that repeated ingestion of similar CVs could make recurring claims appear stronger, even when the repeated claim was not independent evidence. Multiple CVs are usually alternate representations of the same professional history, not independent witnesses.
+
+Decision: The DCT distinguishes source provenance, evidence confidence and inference strength. Repeated sources strengthen provenance, not intrinsic evidence confidence. Evidence confidence is based on the quality of the evidence item itself: specificity, quantification, temporal precision, role/context clarity, internal coherence and explicitness in the source. Inference strength is based on convergence across multiple distinct evidence items, not repeated appearances of the same evidence item.
+
+Implications:
+- If a new source repeats an existing evidence item, reconciliation should merge provenance rather than create a new evidence item.
+- Duplicate provenance must not materially increase evidence confidence or inference confidence.
+- Near-duplicate evidence may refine canonical wording when the incoming source is clearer or more specific.
+- Confidence may increase only because the canonical evidence has become intrinsically better, for example more specific, quantified or temporally precise; not because it appeared twice.
+- Inference strength may increase when a source introduces genuinely new evidence that supports an existing inference.
+- The Overview Brief may mention that the same evidence appears across multiple submitted sources, but must not imply independent corroboration from repeated user-authored CVs.
+
+Consequences:
+- Sources provide provenance.
+- Evidence provides facts.
+- Inferences emerge from distinct evidence.
+- Reflection communicates the current state of the Twin without treating repeated CV wording as independent proof.
+
+ADR-016: Overview Brief includes an editorial pass
+
+Status: Accepted.
+
+Context: Structured Overview Brief items improved formatting and evidence traceability, but repeated testing showed that semantically similar observations can still survive as separate bullets. This is not always a reasoning failure. It is often an editorial failure: the system has selected several true observations but has not compressed, ranked or organized them into a stable executive briefing.
+
+Decision: Overview Brief assembly includes an editorial pass between inference and final rendering. The editorial pass does not generate new information. It merges semantically similar observations, removes redundancy, ranks observations by significance, ensures coverage, improves flow, removes repetition and preserves one material idea per bullet.
+
+Editorial Quality Contract:
+- Coverage: every professionally significant characteristic should appear at least once.
+- Uniqueness: each observation should appear only once.
+- Hierarchy: higher-order observations should precede supporting examples.
+- Proportionality: space devoted to a topic should reflect its importance.
+- Novelty: each bullet should contribute materially new information.
+- Compression: observations that express substantially the same idea should be merged.
+
+Consequences:
+- Overview Brief generation becomes `Evidence -> Inference -> Editorial Pass -> Overview Brief`.
+- The editorial pass may remove or merge candidate brief items, but must not invent new claims.
+- Future assembly can become increasingly deterministic, with the model generating explanatory wording only where needed.
+- Progression detection should become a first-class observation rather than a side effect of summary prose.
+
+ADR-017: Sources are categorized by authorship and elicitation context
+
+Status: Accepted.
+
+Context: The initial DCT source model treats all source material as normalized professional evidence, but future capabilities will introduce materially different source origins. A CV, a performance review and a confidential manager interview may all produce evidence, but they do not carry the same independence, authorship, consent or inference-weighting implications.
+
+Decision: DCT sources are classified into three broad categories:
+
+1. Self-authored sources: the user describing themselves.
+   Examples: CV, LinkedIn profile, career story, user interview, manually entered achievements.
+2. Third-party artefacts: documents produced by other people or institutions before being submitted to the Twin.
+   Examples: performance review, promotion recommendation, reference letter, award citation.
+3. Elicited evidence: evidence generated specifically for the Twin through a designed collection process.
+   Examples: confidential manager interview, peer interview, direct-report interview, client interview.
+
+Implications:
+- Source category is provenance metadata, not a separate reasoning layer.
+- Self-authored repetition strengthens provenance but should not be treated as independent corroboration.
+- Third-party artefacts may provide stronger independent support than self-authored sources, subject to authenticity, context and specificity.
+- Elicited evidence can support future capabilities such as confidential reference collection, structured interviews and convergence/divergence analysis.
+- The system should eventually distinguish source category, source author perspective and source format. For example, a PDF is a format; a performance review is a source type; third-party artefact is a source category; manager is a perspective.
+- Confidence and inference weighting must account for category without blindly privileging any single category. A vague third-party artefact may be weaker than a precise self-authored achievement; an elicited interview may be rich but must preserve consent, attribution and confidentiality constraints.
+
+Consequences:
+- Source adapters should normalize content while preserving source category and perspective metadata.
+- Reconciliation should continue to merge duplicate evidence, but inference weighting can later treat genuinely independent sources differently from repeated self-authored descriptions.
+- The Mirror may eventually distinguish self-described, externally observed and elicited evidence, especially where they converge or diverge.
+- Source removal and evidence revocation rules must respect source category, consent and provenance.
+
+ADR-018: External service handshakes are first-class workflow states
+
+Status: Accepted.
+
+Context: Local Foundry-backed CV ingestion depends on Azure authentication. During Sprint 5 testing, an expired or missing Azure credential caused the user-facing workflow to appear stuck at a generic rendering step while the actual blocker was an Azure device-code sign-in prompt only visible in terminal logs. This cost disproportionate debugging time because authentication was treated as infrastructure plumbing rather than part of the observable Source Adapter workflow.
+
+Decision: Any external service handshake required for a user-triggered workflow must be exposed as an explicit readiness/progress state. This includes local development auth, tenant selection, quota/configuration readiness, token acquisition and model-provider availability. The application should fail fast when configuration is missing, and should surface interactive handshakes in the UI when user action is required.
+
+Implications:
+- `dctwin.ping` is the local readiness boundary before meaningful CV ingestion testing.
+- The start-of-day local workflow should refresh temporary Azure credentials before the server accepts CV ingestion work.
+- Azure token acquisition is logged as its own progress phase, separate from model inference.
+- Device-code sign-in prompts are surfaced in the UI and terminal.
+- The upload wizard must distinguish “waiting for user authentication” from “model is thinking” and “rendering the Twin.”
+- Credential expiry is the first hypothesis for Foundry-backed local failures, not a late-stage discovery.
+- Future external integrations should follow the same rule: if a workflow cannot continue without external state or user action, that state must be observable within one to two minutes.
+
+Consequences:
+- Local test-environment failures collapse to a single ping/progress path instead of scattered symptoms.
+- User trust improves because waits are explained honestly.
+- Agentic orchestration remains debuggable: source adaptation, auth, model inference, reconciliation and rendering are distinct phases with distinct failure modes.

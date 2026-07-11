@@ -1,103 +1,95 @@
-Sprint 5 — Career Mirror
+Sprint 5 — Career Mirror UX and Overview Brief
+
 Objective
 
-Transform the Career Mirror from a generated report into an interactive reflection surface through which the user inspects, negotiates and refines their Digital Career Twin.
+Improve the Career Mirror as a user-facing reflection surface by making the UI more usable and making the Overview Brief materially better: more structured, more evidence-grounded, more scannable and less repetitive.
 
-The Mirror should become the primary interface to the Twin rather than merely a representation of it.
+Sprint 5 is not the sprint for full user negotiation/editing of the Mirror. That work has been carved out into a future sprint after the same level of rigor has been applied to the other Mirror surfaces.
 
-Principles
-The entire Career Mirror is the Reflection.
-Every section represents the Twin's current understanding.
-Every section is negotiable - note, this does not mean that in every case, the user can change it directly.
-Every interpretation can be explained by evidence.
-The user edits their Twin through the Mirror.
+Accepted Sprint Scope
 
-Sprint Goals
 1. Rearrange the UI to make the Career Mirror more user-oriented.
-2. Adjust the summary/reflection section so it speaks conversationally rather than as a detached report.
-3. Add user capabilities that let the user negotiate and refine the Twin through the Mirror.
+2. Move mechanical/developer views behind `?debug=true`.
+3. Split the Career Mirror into clearer user-facing tabs.
+4. Surface Education/Training.
+5. Rework the Overview into an evidence-based executive briefing.
+6. Establish the Overview Brief quality contract.
+7. Add architectural decisions needed to make Overview generation stable:
+   - structured brief items;
+   - evidence/provenance/inference separation;
+   - explicit quality contract;
+   - editorial pass.
+8. Improve Overview behavior across repeated CV ingestion:
+   - less duplicate wording;
+   - stronger first-CV brief;
+   - less overconfidence from repeated user-authored sources;
+   - more stable briefing when subsequent CVs retell the same story.
 
-Initial Scope
-1. Write timings to a log.
-2. All current tabs can be deprecated - they are mechanical features that the user doesn't need direct access to.
-3. The current career mirror should be split into multiple tabs:
-    1. Overview (reflection and current hypotheses)
-    2. Career themes
-    3. Questions
-    4. Career timeline
-    5. Education/Training (we are not currently displaying this even though it’s in the DCT)
-  
-Overview Summary (currently titled 'Reflection')
+Out of Scope for Sprint 5
 
-Rewrite as a conversation with the user rather than a detached analysis.
+The following user interaction capabilities are intentionally deferred:
 
-Note: the more precise Overview Brief specification in `docs/sprints/sprint5b.md` supersedes the exploratory Mirror Voice Contract below. The Overview Brief should be treated as an objective, evidence-based executive briefing rather than conversational or persona-led prose.
+* Explain a Mirror item.
+* Challenge a Mirror item.
+* Correct a Mirror item.
+* Confirm a Mirror item.
+* Add evidence directly from a specific Mirror item.
+* Edit or negotiate tags from the Mirror.
+* Turn open questions into an Interview feature.
 
-Mirror Voice Contract
+These capabilities remain important, but they should be introduced only after the non-Overview parts of the Mirror have their own quality contracts and rendering discipline.
 
-The overview should be evidence-led, not persona-led. It should sound like a professional reflection generated from the user’s evidence, not like a ghost in the machine interpreting their life.
+Implemented Career Mirror Surface
 
-Prefer:
+Default tabs:
 
-- “Your CV presents you as…”
-- “The evidence presents…”
-- “There is less clarity about…”
+1. Overview
+2. Strengths
+3. Career themes
+4. Career timeline
+5. Education/Training
 
-Avoid:
+Debug-only tabs behind `?debug=true`:
 
-- “I’m reading your career as…”
-- “I’m less certain about…”
-- “If this feels directionally right…”
-- Coaching-style next-step prompts inside the summary.
+1. Source blocks
+2. Reconciliation
+3. Timings
+4. Twin JSON
 
-The summary should foreground concrete observations where the evidence supports them:
+The Questions tab is deprecated from the main Mirror surface. Open questions remain internal for now and should re-emerge through a future Interview feature.
 
-- number of roles;
-- visible time span;
-- locations or markets;
-- seniority and management emphasis;
-- consulting versus permanent-role patterns;
-- quantified outcomes and scale indicators.
+Overview Brief
 
-Instead of:
+The precise Overview Brief specification is maintained in `docs/sprints/sprint5b.md`.
 
-"The CV documents..."
+The Overview Brief should be treated as an objective, evidence-based confidential executive briefing rather than conversational or persona-led prose.
 
-Prefer:
+Sprint 5 Acceptance Criteria
 
-"Your CV presents you as..."
+1. UI is user-oriented by default and developer/mechanical views are hidden unless debug mode is enabled.
+2. Overview is presented as a structured executive briefing with stable section headings.
+3. Overview Brief items are evidence-grounded and stored as structured items rather than parsed from model prose.
+4. Overview Brief avoids unsupported interpretation and speculative claims.
+5. Repeated CVs merge provenance without inflating evidence confidence.
+6. Duplicate or non-novel Overview observations are compressed or removed by the editorial pass.
+7. Overview sections are capped and ordered so the result remains scannable.
+8. User interaction/negotiation capabilities are documented as future work rather than treated as incomplete Sprint 5 work.
 
-Section Review
+Future Sprint — Mirror Interaction Model
 
-Each section should communicate:
+Future objective:
 
-"This is my current understanding."
+Turn the Mirror from a reflective surface into a negotiation surface through which users can inspect, challenge, correct, confirm and refine the Digital Career Twin.
 
-Interaction Model
+Candidate capabilities:
 
-Each section should eventually support actions such as:
+* Explain: show evidence and reasoning behind a Mirror item.
+* Challenge: mark an interpretation as disputed.
+* Correct: provide replacement or clarifying evidence.
+* Confirm: mark an interpretation as accepted by the user.
+* Add evidence: attach new source material to a specific role, evidence item or interpretation.
+* Calibrate tags: allow users to accept/reject capability and theme assignments.
 
-Explain
-Challenge
-Correct
-Add evidence
-Confirm
+Principle:
 
-These modify the Twin rather than the displayed text directly.
-
-Design Philosophy
-
-The Mirror should feel like an ongoing conversation with the user's Digital Career Twin.
-
-It is not a report.
-
-It is not a dashboard.
-
-It is a living reflection of the current evidence.
-
-The Twin is the canonical model.
-
-The Mirror is the interface.
-
-User-editable evidence tags: As a user, I can add, edit, or remove tags associated with an evidence item so that the Twin reflects my own understanding of what that evidence demonstrates.
-If a user adds a new tag, the system should review its suitability on other evidence and dynamically add it, rather than forcing the user to add it to each relevant item by hand.
+User actions should modify the Twin or add evidence to it. They should not merely edit display text.

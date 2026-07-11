@@ -406,6 +406,8 @@ def _overview_brief_items(
             evidence_items,
             raw.get("supporting_achievement_indexes", []),
         )
+        if kind in {"interpretation", "attention_item"} and not support:
+            continue
         items.append(
             {
                 "id": _unique_id("brief", f"{section} {kind} {text}", {item["id"] for item in items}),
@@ -422,8 +424,7 @@ def _overview_brief_items(
             items,
             key=lambda item: (
                 _brief_section_order(item["section"]),
-                -item["salience"],
-                -item["confidence"],
+                -_overview_brief_strength(item),
                 item["text"],
             ),
         )
@@ -484,6 +485,26 @@ def _brief_section_order(section: str) -> int:
         "confidence_statement": 5,
     }
     return order.get(section, 99)
+
+
+def _overview_brief_strength(item: dict[str, Any]) -> float:
+    support_count = len(item.get("supporting_evidence_ids", []) or [])
+    support_bonus = min(0.25, support_count * 0.06)
+    kind_bonus = {
+        "interpretation": 0.05,
+        "observation": 0.03,
+        "attention_item": 0.02,
+        "uncertainty": 0.0,
+        "confidence_statement": 0.0,
+    }.get(item.get("kind"), 0.0)
+    metric_bonus = 0.06 if any(char.isdigit() for char in str(item.get("text") or "")) else 0.0
+    return (
+        float(item.get("salience", 0) or 0) * 0.5
+        + float(item.get("confidence", 0) or 0) * 0.25
+        + support_bonus
+        + kind_bonus
+        + metric_bonus
+    )
 
 
 def _overview_brief(summary: str) -> str:

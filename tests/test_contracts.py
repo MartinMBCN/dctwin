@@ -70,6 +70,14 @@ def test_unknown_overview_brief_evidence_reference_is_rejected(contracts: dict[s
         validate_twin(twin, contracts["twin_schema"], contracts["catalog"])
 
 
+def test_unsupported_overview_brief_interpretation_is_rejected(contracts: dict[str, dict]) -> None:
+    twin = deepcopy(contracts["twin"])
+    twin["reflection"]["overview_brief_items"][0]["kind"] = "interpretation"
+    twin["reflection"]["overview_brief_items"][0]["supporting_evidence_ids"] = []
+    with pytest.raises(ContractValidationError, match="requires supporting evidence"):
+        validate_twin(twin, contracts["twin_schema"], contracts["catalog"])
+
+
 def test_unknown_tag_is_rejected(contracts: dict[str, dict]) -> None:
     twin = deepcopy(contracts["twin"])
     twin["evidence_items"][0]["tag_assignments"]["capabilities"][0]["tag_id"] = "tag_invented"

@@ -113,6 +113,9 @@ class ReconciliationAgent:
                         "incoming_id": item.get("id"),
                         "target_id": existing_item.get("id"),
                         "score": round(score, 3),
+                        "confidence_delta": "none",
+                        "inference_delta": "none",
+                        "canonical_wording_delta": "none",
                     }
                 )
             else:
@@ -223,6 +226,9 @@ class ReconciliationAgent:
                         "entity": "manual_evidence",
                         "target_id": target.get("id"),
                         "score": round(score, 3),
+                        "confidence_delta": "none",
+                        "inference_delta": "none",
+                        "canonical_wording_delta": "none",
                     }
                 )
                 continue
@@ -491,13 +497,17 @@ class ReconciliationAgent:
 
     @staticmethod
     def _merge_inference(target: dict[str, Any], incoming: dict[str, Any]) -> None:
+        existing_support = set(target.get("supporting_evidence_ids", []))
+        incoming_support = set(incoming.get("supporting_evidence_ids", []))
+        new_distinct_support = incoming_support - existing_support
         support = list(dict.fromkeys([
             *target.get("supporting_evidence_ids", []),
             *incoming.get("supporting_evidence_ids", []),
         ]))
         target["supporting_evidence_ids"] = support
-        target["confidence"] = max(target.get("confidence", 0), incoming.get("confidence", 0))
-        if len(str(incoming.get("rationale", ""))) > len(str(target.get("rationale", ""))):
+        if new_distinct_support:
+            target["confidence"] = max(target.get("confidence", 0), incoming.get("confidence", 0))
+        if new_distinct_support and len(str(incoming.get("rationale", ""))) > len(str(target.get("rationale", ""))):
             target["rationale"] = incoming.get("rationale")
         target["alternatives"] = list(dict.fromkeys([
             *target.get("alternatives", []),
@@ -745,6 +755,8 @@ def _merge_overview_brief_items(*lists: list[dict[str, Any]]) -> list[dict[str, 
             item = _normalized_overview_brief_item(item)
             if item is None:
                 continue
+            if not _overview_brief_item_has_required_support(item):
+                continue
             match = _find_similar_overview_brief_item(merged, item)
             if match is None:
                 merged.append(deepcopy(item))
@@ -769,15 +781,179 @@ def _merge_overview_brief_items(*lists: list[dict[str, Any]]) -> list[dict[str, 
         "professionally_salient_attention_items": 4,
         "confidence_statement": 5,
     }
-    return sorted(
+    sorted_items = sorted(
         merged,
         key=lambda item: (
             section_order.get(item.get("section"), 99),
-            -item.get("salience", 0),
-            -item.get("confidence", 0),
+            -_overview_brief_strength(item),
             item.get("text", ""),
         ),
-    )[:60]
+    )
+    return _limit_overview_brief_sections(_editorial_pass_overview_brief_items(sorted_items))
+
+
+def _editorial_pass_overview_brief_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    edited: list[dict[str, Any]] = []
+    for item in items:
+        if _is_redundant_overview_brief_item(edited, item):
+            continue
+        edited.append(item)
+    return edited
+
+
+def _is_redundant_overview_brief_item(
+    previous_items: list[dict[str, Any]],
+    incoming: dict[str, Any],
+) -> bool:
+    incoming_section = incoming.get("section")
+    incoming_text = str(incoming.get("text") or "")
+    incoming_tokens = _meaningful_tokens(incoming_text)
+    incoming_signature = _editorial_signature(incoming_tokens)
+    incoming_metrics = _metrics(incoming_text)
+    for item in previous_items:
+        if item.get("section") != incoming_section:
+            continue
+        existing_text = str(item.get("text") or "")
+        existing_tokens = _meaningful_tokens(existing_text)
+        if not incoming_tokens or not existing_tokens:
+            continue
+        containment = _containment(incoming_tokens, existing_tokens)
+        token_score = _jaccard(incoming_tokens, existing_tokens)
+        shared_signature = incoming_signature & _editorial_signature(existing_tokens)
+        shared_metrics = incoming_metrics & _metrics(existing_text)
+        if containment >= 0.62 or token_score >= 0.5:
+            return True
+        if len(shared_signature) >= 2 and containment >= 0.36:
+            return True
+        if shared_metrics and len(shared_signature) >= 1 and containment >= 0.32:
+            return True
+        if (
+            incoming_section == "patterns_and_structural_observations"
+            and _operating_model_editorial_overlap(incoming_tokens, existing_tokens)
+        ):
+            return True
+    return False
+
+
+def _operating_model_editorial_overlap(left: set[str], right: set[str]) -> bool:
+    operating_terms = {"model", "operat", "operating"}
+    structure_terms = {
+        "dependenci",
+        "delivery",
+        "engineering",
+        "engineer",
+        "organization",
+        "organizations",
+        "platform",
+        "product",
+        "scale",
+        "scaling",
+        "speed",
+        "structur",
+        "team",
+        "teams",
+        "velocity",
+    }
+    return (
+        bool(left & operating_terms)
+        and bool(right & operating_terms)
+        and bool(left & structure_terms)
+        and bool(right & structure_terms)
+    )
+
+
+def _editorial_signature(tokens: set[str]) -> set[str]:
+    signature_terms = {
+        "adoption",
+        "ai",
+        "automation",
+        "banking",
+        "capabilities",
+        "cloud",
+        "compliance",
+        "consult",
+        "consulting",
+        "cost",
+        "delivery",
+        "domain",
+        "engineering",
+        "enterprise",
+        "governance",
+        "international",
+        "leadership",
+        "management",
+        "metric",
+        "metrics",
+        "model",
+        "models",
+        "operat",
+        "operating",
+        "outcome",
+        "outcomes",
+        "platform",
+        "product",
+        "regulated",
+        "reliability",
+        "reorganiz",
+        "scale",
+        "scaling",
+        "speed",
+        "structur",
+        "team",
+        "teams",
+        "transformation",
+        "velocity",
+    }
+    return tokens & signature_terms
+
+
+def _overview_brief_strength(item: dict[str, Any]) -> float:
+    support_count = len(item.get("supporting_evidence_ids", []) or [])
+    support_bonus = min(0.25, support_count * 0.06)
+    kind = item.get("kind")
+    kind_bonus = {
+        "interpretation": 0.05,
+        "observation": 0.03,
+        "attention_item": 0.02,
+        "uncertainty": 0.0,
+        "confidence_statement": 0.0,
+    }.get(kind, 0.0)
+    metric_bonus = 0.06 if _metrics(item.get("text")) else 0.0
+    return (
+        float(item.get("salience", 0) or 0) * 0.5
+        + float(item.get("confidence", 0) or 0) * 0.25
+        + support_bonus
+        + kind_bonus
+        + metric_bonus
+    )
+
+
+def _overview_brief_item_has_required_support(item: dict[str, Any]) -> bool:
+    kind = item.get("kind")
+    if kind not in {"interpretation", "attention_item"}:
+        return True
+    return bool(item.get("supporting_evidence_ids"))
+
+
+def _limit_overview_brief_sections(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    section_limits = {
+        "career_in_brief": 2,
+        "patterns_and_structural_observations": 6,
+        "areas_of_higher_confidence": 5,
+        "areas_of_less_clarity": 2,
+        "professionally_salient_attention_items": 3,
+        "confidence_statement": 1,
+    }
+    counts: dict[str, int] = {}
+    limited: list[dict[str, Any]] = []
+    for item in items:
+        section = str(item.get("section") or "")
+        count = counts.get(section, 0)
+        if count >= section_limits.get(section, 3):
+            continue
+        limited.append(item)
+        counts[section] = count + 1
+    return limited[:19]
 
 
 def _find_similar_overview_brief_item(
@@ -999,7 +1175,9 @@ def _normalized_overview_brief_item(item: dict[str, Any]) -> dict[str, Any] | No
     tokens = _meaningful_tokens(text)
     if _is_logistical_cv_gap(lower):
         return None
-    if _is_quantified_outcome_item(text, tokens):
+    if _is_confidence_statement_item(tokens):
+        normalized["section"] = "confidence_statement"
+    elif _is_quantified_outcome_item(text, tokens):
         normalized["section"] = "areas_of_higher_confidence"
     elif _is_contract_transition_attention_item(tokens):
         normalized["section"] = "professionally_salient_attention_items"
@@ -1029,6 +1207,8 @@ def _is_logistical_cv_gap(text: str) -> bool:
         "retention outcome",
         "retention outcomes",
         "retained vs pure-contract",
+        "indicative of turnover",
+        "project-limited",
     )
     return any(term in text for term in logistical_terms)
 
@@ -1075,6 +1255,12 @@ def _is_contract_transition_attention_item(tokens: set[str]) -> bool:
         "transitions",
     }
     return bool(tokens & contract_terms) and bool(tokens & attention_terms)
+
+
+def _is_confidence_statement_item(tokens: set[str]) -> bool:
+    confidence_terms = {"based", "confidence", "confid", "explicit", "evidence", "observations", "source"}
+    claim_terms = {"claims", "descriptions", "outcomes", "role", "roles", "technical"}
+    return len(tokens & confidence_terms) >= 2 and bool(tokens & claim_terms)
 
 
 def _is_uncertainty_item(text: str, tokens: set[str]) -> bool:

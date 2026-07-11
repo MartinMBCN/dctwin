@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from collections import Counter
+import re
 from typing import Any, Iterable
-
-from jsonschema import Draft202012Validator, FormatChecker
 
 
 class ContractValidationError(ValueError):
@@ -13,27 +12,152 @@ class ContractValidationError(ValueError):
 
 
 def _schema_issues(document: dict[str, Any], schema: dict[str, Any]) -> list[str]:
-    validator = Draft202012Validator(schema, format_checker=FormatChecker())
     issues: list[str] = []
-    for error in sorted(
-        validator.iter_errors(document), key=lambda item: list(item.absolute_path)
-    ):
-        path = ".".join(str(part) for part in error.absolute_path) or "$"
-        if error.validator == "contains":
-            required_type = (
-                error.schema.get("contains", {})
-                .get("properties", {})
-                .get("tag_type", {})
-                .get("const")
-            )
-            if required_type:
-                issues.append(
-                    f"{path}: must include at least one tag assignment with "
-                    f"tag_type={required_type!r}"
-                )
-                continue
-        issues.append(f"{path}: {error.message}")
+    _validate_schema_subset(document, schema, schema, [], issues)
     return issues
+
+
+def _validate_schema_subset(
+    value: Any,
+    rule: dict[str, Any],
+    root: dict[str, Any],
+    path: list[str],
+    issues: list[str],
+) -> None:
+    if "$ref" in rule:
+        rule = _resolve_ref(root, rule["$ref"])
+
+    if "anyOf" in rule:
+        branch_issues: list[list[str]] = []
+        for branch in rule["anyOf"]:
+            trial: list[str] = []
+            _validate_schema_subset(value, branch, root, path, trial)
+            if not trial:
+                return
+            branch_issues.append(trial)
+        issues.append(f"{_path(path)}: does not match any allowed schema")
+        return
+
+    if "const" in rule and value != rule["const"]:
+        issues.append(f"{_path(path)}: expected {rule['const']!r}")
+
+    if "enum" in rule and value not in rule["enum"]:
+        issues.append(f"{_path(path)}: expected one of {rule['enum']!r}")
+
+    expected_type = rule.get("type")
+    if expected_type is not None and not _matches_type(value, expected_type):
+        issues.append(f"{_path(path)}: expected type {_type_label(expected_type)}")
+        return
+
+    if isinstance(value, str):
+        if len(value) < rule.get("minLength", 0):
+            issues.append(f"{_path(path)}: string is shorter than {rule['minLength']}")
+        pattern = rule.get("pattern")
+        if pattern and re.fullmatch(pattern, value) is None:
+            issues.append(f"{_path(path)}: does not match pattern {pattern!r}")
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if "minimum" in rule and value < rule["minimum"]:
+            issues.append(f"{_path(path)}: must be >= {rule['minimum']}")
+        if "maximum" in rule and value > rule["maximum"]:
+            issues.append(f"{_path(path)}: must be <= {rule['maximum']}")
+
+    if isinstance(value, list):
+        if "minItems" in rule and len(value) < rule["minItems"]:
+            issues.append(f"{_path(path)}: must contain at least {rule['minItems']} item(s)")
+        if "maxItems" in rule and len(value) > rule["maxItems"]:
+            issues.append(f"{_path(path)}: must contain at most {rule['maxItems']} item(s)")
+        if rule.get("uniqueItems") and len({repr(item) for item in value}) != len(value):
+            issues.append(f"{_path(path)}: items must be unique")
+        item_rule = rule.get("items")
+        if isinstance(item_rule, dict):
+            for index, item in enumerate(value):
+                _validate_schema_subset(item, item_rule, root, [*path, str(index)], issues)
+        contains_rule = rule.get("contains")
+        if isinstance(contains_rule, dict):
+            if not any(
+                not _schema_issues_for_value(item, contains_rule, root, [*path, str(index)])
+                for index, item in enumerate(value)
+            ):
+                required_type = (
+                    contains_rule.get("properties", {})
+                    .get("tag_type", {})
+                    .get("const")
+                )
+                if required_type:
+                    issues.append(
+                        f"{_path(path)}: must include at least one tag assignment with "
+                        f"tag_type={required_type!r}"
+                    )
+                else:
+                    issues.append(f"{_path(path)}: must contain a matching item")
+
+    if isinstance(value, dict):
+        required = rule.get("required", [])
+        for key in required:
+            if key not in value:
+                issues.append(f"{_path([*path, key])}: required property is missing")
+        properties = rule.get("properties", {})
+        if rule.get("additionalProperties") is False:
+            for key in value:
+                if key not in properties:
+                    issues.append(f"{_path([*path, key])}: additional property is not allowed")
+        for key, child_rule in properties.items():
+            if key in value:
+                _validate_schema_subset(value[key], child_rule, root, [*path, key], issues)
+
+
+def _schema_issues_for_value(
+    value: Any,
+    rule: dict[str, Any],
+    root: dict[str, Any],
+    path: list[str],
+) -> list[str]:
+    issues: list[str] = []
+    _validate_schema_subset(value, rule, root, path, issues)
+    return issues
+
+
+def _resolve_ref(root: dict[str, Any], ref: str) -> dict[str, Any]:
+    if not ref.startswith("#/"):
+        raise ValueError(f"Unsupported schema reference: {ref}")
+    current: Any = root
+    for part in ref.removeprefix("#/").split("/"):
+        current = current[part]
+    if not isinstance(current, dict):
+        raise ValueError(f"Schema reference does not resolve to an object: {ref}")
+    return current
+
+
+def _matches_type(value: Any, expected: str | list[str]) -> bool:
+    options = expected if isinstance(expected, list) else [expected]
+    return any(_matches_single_type(value, option) for option in options)
+
+
+def _matches_single_type(value: Any, expected: str) -> bool:
+    if expected == "object":
+        return isinstance(value, dict)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "null":
+        return value is None
+    raise ValueError(f"Unsupported schema type: {expected}")
+
+
+def _type_label(expected: str | list[str]) -> str:
+    return " or ".join(expected) if isinstance(expected, list) else expected
+
+
+def _path(path: list[str]) -> str:
+    return ".".join(path) or "$"
 
 
 def _duplicates(values: Iterable[str]) -> set[str]:
@@ -150,6 +274,8 @@ def validate_twin(
 
     for brief_item in twin.get("reflection", {}).get("overview_brief_items", []):
         owner = f"overview brief item {brief_item.get('id')}"
+        if brief_item.get("kind") in {"interpretation", "attention_item"} and not brief_item.get("supporting_evidence_ids"):
+            issues.append(f"{owner}: {brief_item.get('kind')} requires supporting evidence")
         for evidence_id in brief_item.get("supporting_evidence_ids", []):
             if evidence_id not in evidence:
                 issues.append(f"{owner}: unknown supporting evidence {evidence_id!r}")

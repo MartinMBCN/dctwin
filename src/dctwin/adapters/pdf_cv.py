@@ -5,8 +5,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from pypdf import PdfReader
-
 from dctwin.adapters.base import AdaptedSource
 from dctwin.privacy import minimize_direct_identifiers
 
@@ -22,6 +20,8 @@ class PdfCvAdapter:
         return path.is_file() and path.suffix.lower() == ".pdf"
 
     def adapt(self, path: Path) -> AdaptedSource:
+        from pypdf import PdfReader
+
         raw_bytes = path.read_bytes()
         digest = hashlib.sha256(raw_bytes).hexdigest()
         source_id = f"src_{digest[:16]}"

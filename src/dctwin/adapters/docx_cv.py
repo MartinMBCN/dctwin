@@ -5,8 +5,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from docx import Document
-
 from dctwin.adapters.base import AdaptedSource
 from dctwin.privacy import minimize_direct_identifiers
 
@@ -22,6 +20,8 @@ class DocxCvAdapter:
         return path.is_file() and path.suffix.lower() == ".docx"
 
     def adapt(self, path: Path) -> AdaptedSource:
+        from docx import Document
+
         raw_bytes = path.read_bytes()
         digest = hashlib.sha256(raw_bytes).hexdigest()
         source_id = f"src_{digest[:16]}"

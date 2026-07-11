@@ -102,6 +102,14 @@ def test_build_twin_from_compact_extraction_produces_valid_dct() -> None:
                     "confidence": 0.78,
                     "supporting_achievement_indexes": [0],
                 },
+                {
+                    "section": "patterns_and_structural_observations",
+                    "kind": "interpretation",
+                    "text": "Unsupported interpretation should not enter the canonical Twin.",
+                    "salience": 0.95,
+                    "confidence": 0.9,
+                    "supporting_achievement_indexes": [],
+                },
             ],
             "recurring_patterns": [
                 {
@@ -144,6 +152,10 @@ def test_build_twin_from_compact_extraction_produces_valid_dct() -> None:
     assert twin["reflection"]["overview_brief_items"][0]["supporting_evidence_ids"] == [
         twin["evidence_items"][0]["id"]
     ]
+    assert not any(
+        "Unsupported interpretation" in item["text"]
+        for item in twin["reflection"]["overview_brief_items"]
+    )
     assert twin["inferences"][0]["value"] == "Platform engineering for delivery acceleration"
     validate_twin(twin, schema, catalog, source_documents=[source])
 

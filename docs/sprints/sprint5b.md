@@ -9,7 +9,7 @@ Interpretations are higher-order patterns supported by multiple observations.
 The briefing should establish the observations before drawing interpretations.
 Every interpretation should be traceable to multiple observations.
 
-3. Professional Salience
+2. Professional Salience
 The Overview Brief should surface characteristics that are likely to influence professional understanding of the individual.
 These include:
 * Recurring themes.
@@ -29,7 +29,7 @@ Such observations should be presented neutrally, without speculation or judgemen
 4. Evidence Priority
 The prominence of observations within the Overview Brief should reflect the strength, recurrence and quality of the supporting evidence. Briefings should not over-emphasize isolated or weakly supported themes.
 
-5.Professional Proportionality
+5. Professional Proportionality
 The space devoted to a topic should be broadly proportional to its significance within the overall Twin. Briefings should neither exaggerate nor minimise observations simply because they are unusual.
 
 Purpose
@@ -176,11 +176,18 @@ Quality rules:
 Target outcome: the brief reads as though a senior human analyst deliberately ordered it.
 
 Quality rules:
+* The brief should pass through an editorial pass before rendering.
 * Put the strongest and most synthesizing observation first within each section.
 * Prefer one strong synthesized bullet over several adjacent factual fragments.
 * Use concrete anchors inside synthesis: dates, industries, metrics, geographies, team sizes, role types.
 * Avoid generic openers such as "demonstrated ability" unless followed by unusually concrete evidence.
 * Avoid prose that sounds like a model explaining itself.
+* Coverage: every professionally significant characteristic should appear at least once.
+* Uniqueness: each observation should appear only once.
+* Hierarchy: higher-order observations should precede supporting examples.
+* Proportionality: space devoted to a topic should reflect its importance.
+* Novelty: each bullet should contribute materially new information beyond previous bullets in the same section.
+* Compression: merge observations that express substantially the same idea.
 
 3. Evidence Quality
 
@@ -193,6 +200,7 @@ Quality rules:
 * Weak or single-source evidence should be framed narrowly.
 * Absence-of-evidence claims should be used sparingly.
 * Suppress claims a CV would not normally answer, including notice period, motivation for leaving, handoff, availability, retention outcomes, post-engagement impact or employer intent.
+* Evidence confidence must not be inflated by repeated appearances of the same claim across multiple user-authored sources. Repetition strengthens provenance and may improve canonical wording, but only distinct evidence items should strengthen higher-order inferences.
 
 4. Presentation
 
